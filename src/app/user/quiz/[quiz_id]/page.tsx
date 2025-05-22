@@ -2,12 +2,11 @@ import { Suspense } from 'react';
 import { Layout } from '@/components/Layout';
 import QuizClient from './client';
 
-export default async function Page({
-  params,
-}: {
-  params: { quiz_id: string };
-}) {
-  const quizId = params.quiz_id;
+type Params = Promise<{ quiz_id: string }>;
+
+// Server Component
+export default async function Page({ params }: { params: Params }) {
+  const { quiz_id } = await params;
   
   return (
     <Suspense fallback={
@@ -17,7 +16,7 @@ export default async function Page({
         </div>
       </Layout>
     }>
-      <QuizClient quizId={quizId} />
+      <QuizClient quizId={quiz_id} />
     </Suspense>
   );
 }

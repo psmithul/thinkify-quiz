@@ -2,11 +2,12 @@ import { Suspense } from 'react';
 import { Layout } from '@/components/Layout';
 import UserClient from './client';
 
-export default function Page({
-  params,
-}: {
-  params: { user_id: string };
-}) {
+type Params = Promise<{ user_id: string }>;
+
+// Server Component
+export default async function Page({ params }: { params: Params }) {
+  const { user_id } = await params;
+  
   return (
     <Suspense fallback={
       <Layout>
@@ -15,17 +16,7 @@ export default function Page({
         </div>
       </Layout>
     }>
-      <UserClientWrapper params={params} />
+      <UserClient userId={user_id} />
     </Suspense>
-  );
-}
-
-async function UserClientWrapper({
-  params
-}: {
-  params: { user_id: string };
-}) {
-  return (
-    <UserClient userId={params.user_id} />
   );
 } 

@@ -1,13 +1,15 @@
 import { Suspense } from 'react';
 import { CreatorPublicProfile } from './public-profile';
 
+type Params = Promise<{ creator_id: string }>;
+
 // Server Component
-export default async function CreatorPublicProfilePage({ params }: { params: { creator_id: string } }) {
-  const creatorId = params.creator_id;
+export default async function CreatorPublicProfilePage({ params }: { params: Params }) {
+  const { creator_id } = await params;
   
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <CreatorPublicProfile creatorId={creatorId} />
+      <CreatorPublicProfile creatorId={creator_id} />
     </Suspense>
   );
 } 
