@@ -10,6 +10,7 @@ import { formatErrorMessage } from '@/utils/errorHandler';
 import { eligibilityTiers, getEligibilityTier } from '../../quiz/[quiz_id]/client';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { motion } from 'framer-motion';
 
 type ResultWithDetails = {
   id: string;
@@ -178,7 +179,12 @@ export function ResultId({ resultId }: { resultId: string }) {
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto space-y-8">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-4xl mx-auto space-y-8"
+      >
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Your Certificate</h1>
           <Button 
@@ -190,16 +196,23 @@ export function ResultId({ resultId }: { resultId: string }) {
         </div>
 
         {error && (
-          <div className="bg-red-50 p-4 rounded-md">
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-50 p-4 rounded-md"
+          >
             <p className="text-sm text-red-600">{error}</p>
-          </div>
+          </motion.div>
         )}
 
         {result && (
           <>
             {/* Certificate Preview */}
-            <div 
+            <motion.div 
               ref={certificateRef} 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, type: "spring", bounce: 0.3 }}
               className="border-8 border-blue-200 bg-white p-12 shadow-lg rounded-lg relative overflow-hidden"
               style={{ aspectRatio: '1.414', maxWidth: '100%', height: 'auto' }}
             >
@@ -213,38 +226,89 @@ export function ResultId({ resultId }: { resultId: string }) {
               {/* Certificate Content */}
               <div className="relative z-10 flex flex-col items-center justify-center h-full">
                 <div className="text-center">
-                  <h1 className="text-4xl font-bold text-blue-600 mb-6">Certificate of Achievement</h1>
+                  <motion.h1 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-4xl font-bold text-blue-600 mb-6"
+                  >
+                    Certificate of Achievement
+                  </motion.h1>
                   
-                  <p className="text-xl mb-8">This is to certify that</p>
+                  <motion.p 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5 }}
+                    className="text-xl mb-8"
+                  >
+                    This is to certify that
+                  </motion.p>
                   
-                  <h2 className="text-3xl font-bold mb-8 text-gray-800 border-b-2 border-gray-300 pb-2">
+                  <motion.h2 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.7 }}
+                    className="text-3xl font-bold mb-8 text-gray-800 border-b-2 border-gray-300 pb-2"
+                  >
                     {result.user.full_name || result.user.email}
-                  </h2>
+                  </motion.h2>
                   
-                  <p className="text-xl mb-6">has successfully completed</p>
+                  <motion.p 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.9 }}
+                    className="text-xl mb-6"
+                  >
+                    has successfully completed
+                  </motion.p>
                   
-                  <h3 className="text-2xl font-bold text-gray-800 mb-6">
+                  <motion.h3 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1.1 }}
+                    className="text-2xl font-bold text-gray-800 mb-6"
+                  >
                     {result.quiz.title}
-                  </h3>
+                  </motion.h3>
                   
-                  <p className="text-lg mb-6">
+                  <motion.p 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1.3 }}
+                    className="text-lg mb-6"
+                  >
                     with a score of <span className="font-bold">{result.score.toFixed(1)}%</span>
-                  </p>
+                  </motion.p>
                   
-                  <p className="text-lg mb-8">
+                  <motion.p 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1.5 }}
+                    className="text-lg mb-8"
+                  >
                     Achieving {getEligibilityTier(result.score).label} Level Eligibility
-                  </p>
+                  </motion.p>
                   
-                  <div className="mt-12 text-gray-600">
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1.7 }}
+                    className="mt-12 text-gray-600"
+                  >
                     <p>Issued on: {new Date(result.completed_at).toLocaleDateString()}</p>
                     <p>Certificate ID: {result.id.substring(0, 8).toUpperCase()}</p>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Download and Share Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 2, duration: 0.5 }}
+              className="flex flex-col sm:flex-row gap-4"
+            >
               <Button 
                 onClick={downloadAsPDF}
                 isLoading={isGenerating}
@@ -260,10 +324,10 @@ export function ResultId({ resultId }: { resultId: string }) {
               >
                 Add to LinkedIn Profile
               </Button>
-            </div>
+            </motion.div>
           </>
         )}
-      </div>
+      </motion.div>
     </Layout>
   );
 } 

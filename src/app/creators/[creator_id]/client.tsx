@@ -4,18 +4,27 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
-import { supabase, User, Quiz } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/authContext';
+import { supabase, User, Quiz, Follow } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
+import { motion } from 'framer-motion';
 
 type CreatorWithQuizzes = User & {
   quizzes: Quiz[];
+  followerCount: number;
 };
 
 export function CreatorProfile({ creatorId }: { creatorId: string }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [creator, setCreator] = useState<CreatorWithQuizzes | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followers, setFollowers] = useState<User[]>([]);
+  const [showFollowers, setShowFollowers] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
    
   useEffect(() => {
     async function fetchCreatorProfile() {
@@ -39,11 +48,33 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
           .order('created_at', { ascending: false });
           
         if (quizzesError) throw quizzesError;
+
+        // Fetch follower count
+        const { count, error: followerCountError } = await supabase
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', creatorId);
+
+        if (followerCountError) throw followerCountError;
         
         setCreator({
           ...creatorData,
-          quizzes: quizzesData || []
+          quizzes: quizzesData || [],
+          followerCount: count || 0
         });
+
+        // Check if current user is following this creator
+        if (user) {
+          const { data: followData, error: followError } = await supabase
+            .from('follows')
+            .select('*')
+            .eq('follower_id', user.id)
+            .eq('following_id', creatorId)
+            .maybeSingle();
+
+          if (followError) throw followError;
+          setIsFollowing(!!followData);
+        }
       } catch (err) {
         setError(formatErrorMessage(err));
       } finally {
@@ -54,7 +85,81 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
     if (creatorId) {
       fetchCreatorProfile();
     }
-  }, [creatorId]);
+  }, [creatorId, user]);
+
+  const handleFollow = async () => {
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+
+    setIsActionLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      if (isFollowing) {
+        // Unfollow logic
+        const { error } = await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', creatorId);
+
+        if (error) throw error;
+        setIsFollowing(false);
+        setCreator(prev => prev ? {...prev, followerCount: Math.max(0, prev.followerCount - 1)} : null);
+        setSuccess(`You have unfollowed ${creator?.full_name || 'this creator'}`);
+      } else {
+        // Follow logic
+        const { error } = await supabase
+          .from('follows')
+          .insert({
+            follower_id: user.id,
+            following_id: creatorId
+          });
+
+        if (error) throw error;
+        setIsFollowing(true);
+        setCreator(prev => prev ? {...prev, followerCount: prev.followerCount + 1} : null);
+        setSuccess(`You are now following ${creator?.full_name || 'this creator'}`);
+      }
+    } catch (err) {
+      setError(formatErrorMessage(err));
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const fetchFollowers = async () => {
+    if (!showFollowers) {
+      try {
+        setIsActionLoading(true);
+        const { data, error } = await supabase
+          .from('follows')
+          .select('follower:users!follower_id(id, email, full_name, profile_image, role)')
+          .eq('following_id', creatorId)
+          .limit(10);
+
+        if (error) throw error;
+        // Extract the follower data from each row
+        const followerUsers: User[] = [];
+        data?.forEach(item => {
+          if (item.follower) {
+            followerUsers.push(item.follower as unknown as User);
+          }
+        });
+        setFollowers(followerUsers);
+        setShowFollowers(true);
+      } catch (err) {
+        setError(formatErrorMessage(err));
+      } finally {
+        setIsActionLoading(false);
+      }
+    } else {
+      setShowFollowers(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -102,16 +207,38 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
         </div>
         
         {error && (
-          <div className="bg-red-50 p-4 rounded-md">
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-50 p-4 rounded-md"
+          >
             <p className="text-sm text-red-600">{error}</p>
-          </div>
+          </motion.div>
+        )}
+
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-green-50 p-4 rounded-md"
+          >
+            <p className="text-sm text-green-600">{success}</p>
+          </motion.div>
         )}
         
-        <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="bg-white shadow rounded-lg overflow-hidden border border-gray-200"
+        >
           <div className="p-8">
             <div className="flex flex-col md:flex-row">
               <div className="mb-6 md:mb-0 md:mr-8">
-                <div className="h-32 w-32 rounded-full overflow-hidden bg-gray-100 border border-gray-300">
+                <motion.div 
+                  whileHover={{ scale: 1.05 }}
+                  className="h-32 w-32 rounded-full overflow-hidden bg-gray-100 border border-gray-300"
+                >
                   {creator.profile_image ? (
                     <img 
                       src={creator.profile_image} 
@@ -127,18 +254,34 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
                       {(creator.full_name || creator.email || 'C').charAt(0).toUpperCase()}
                     </div>
                   )}
-                </div>
+                </motion.div>
               </div>
               
               <div className="flex-1">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  {creator.full_name || creator.email}
-                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:mb-0">
+                    {creator.full_name || creator.email}
+                  </h2>
+                  <Button
+                    variant={isFollowing ? "outline" : "primary"}
+                    size="sm"
+                    onClick={handleFollow}
+                    isLoading={isActionLoading}
+                  >
+                    {isFollowing ? "Unfollow" : "Follow"}
+                  </Button>
+                </div>
                 
-                <div className="mb-4">
+                <div className="mb-4 flex space-x-4">
                   <span className="bg-purple-100 text-purple-800 text-sm font-medium px-2.5 py-0.5 rounded">
                     {creator.quizzes.length} {creator.quizzes.length === 1 ? 'Quiz' : 'Quizzes'}
                   </span>
+                  <button 
+                    onClick={fetchFollowers} 
+                    className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded hover:bg-blue-200 transition-colors"
+                  >
+                    {creator.followerCount} {creator.followerCount === 1 ? 'Follower' : 'Followers'}
+                  </button>
                 </div>
                 
                 {creator.bio && (
@@ -149,7 +292,46 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
               </div>
             </div>
           </div>
-        </div>
+          
+          {showFollowers && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="border-t border-gray-200 p-4"
+            >
+              <h3 className="text-lg font-medium text-gray-900 mb-3">Followers</h3>
+              {followers.length === 0 ? (
+                <p className="text-gray-500">No followers yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {followers.map(follower => (
+                    <div key={follower.id} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50">
+                      <div className="h-10 w-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                        {follower.profile_image ? (
+                          <img 
+                            src={follower.profile_image} 
+                            alt={follower.full_name || 'User'} 
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full w-full bg-blue-100 text-blue-800 text-sm font-bold">
+                            {(follower.full_name || follower.email || 'U').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {follower.full_name || follower.email}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </motion.div>
         
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Quizzes by this Creator</h2>
@@ -160,8 +342,14 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {creator.quizzes.map((quiz) => (
-                <div key={quiz.id} className="bg-white shadow rounded-lg p-6 border border-gray-200">
+              {creator.quizzes.map((quiz, index) => (
+                <motion.div 
+                  key={quiz.id} 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-white shadow rounded-lg p-6 border border-gray-200"
+                >
                   <h3 className="text-lg font-medium text-gray-900 mb-2">{quiz.title}</h3>
                   <p className="text-gray-600 mb-4 line-clamp-3">{quiz.description}</p>
                   
@@ -176,7 +364,7 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
                       Take Quiz
                     </Button>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}

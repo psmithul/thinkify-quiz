@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import { eligibilityTiers, getEligibilityTier, EligibilityTier } from '../quiz/[quiz_id]/client';
+import { motion } from 'framer-motion';
+import { JobOpportunities } from '@/app/components/JobOpportunities';
 
 type Result = {
   id: string;
@@ -19,6 +21,7 @@ type Result = {
     id: string;
     title: string;
     description: string;
+    category?: string;
   };
 };
 
@@ -26,8 +29,10 @@ export default function UserResults() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [results, setResults] = useState<Result[]>([]);
+  const [selectedResult, setSelectedResult] = useState<Result | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showJobOpportunities, setShowJobOpportunities] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -76,11 +81,44 @@ export default function UserResults() {
     return getEligibilityTier(result.score);
   };
 
+  const handleShowJobOpportunities = (result: Result) => {
+    setSelectedResult(result);
+    setShowJobOpportunities(true);
+  };
+
+  const handleBackToResults = () => {
+    setShowJobOpportunities(false);
+    setSelectedResult(null);
+  };
+
   if (authLoading || isLoading) {
     return (
       <Layout>
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (showJobOpportunities && selectedResult) {
+    return (
+      <Layout>
+        <div className="space-y-8">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-900">Job Opportunities</h1>
+            <Button 
+              variant="outline" 
+              onClick={handleBackToResults}
+            >
+              Back to Results
+            </Button>
+          </div>
+
+          <JobOpportunities 
+            score={selectedResult.score} 
+            quizType={selectedResult.quiz?.category || selectedResult.quiz?.title || 'General Knowledge'} 
+          />
         </div>
       </Layout>
     );
@@ -128,7 +166,12 @@ export default function UserResults() {
                 {results.map((result) => {
                   const eligibilityTier = getEligibilityTierForResult(result);
                   return (
-                    <tr key={result.id}>
+                    <motion.tr 
+                      key={result.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3 }}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {result.quiz?.title || 'Unknown Quiz'}
                       </td>
@@ -156,6 +199,12 @@ export default function UserResults() {
                           >
                             View Quiz
                           </button>
+                          <button
+                            className="text-blue-600 hover:text-blue-900"
+                            onClick={() => handleShowJobOpportunities(result)}
+                          >
+                            Job Matches
+                          </button>
                           {eligibilityTier.tier >= 3 && (
                             <button
                               className="text-green-600 hover:text-green-900"
@@ -166,7 +215,7 @@ export default function UserResults() {
                           )}
                         </div>
                       </td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
               </tbody>

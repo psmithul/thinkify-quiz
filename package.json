@@ -9,12 +9,14 @@
     "start": "next start",
     "lint": "next lint",
     "init-db": "node scripts/init-db.js",
-    "create-dummy-data": "node scripts/create-dummy-quizzes.js"
+    "create-dummy-data": "node scripts/create-dummy-quizzes.js",
+    "setup-follows": "node scripts/setup-follows-table.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
     "@types/html2canvas": "^1.0.0",
     "dotenv": "^16.5.0",
+    "framer-motion": "^12.12.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
     "next": "15.3.2",

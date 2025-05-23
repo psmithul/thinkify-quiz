@@ -66,4 +66,13 @@ export type Payment = {
   amount: number;
   status: 'pending' | 'completed' | 'failed';
   paid_at: string | null;
+};
+
+export type Follow = {
+  id: string;
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+  follower?: User;
+  following?: User;
 }; 

@@ -7,6 +7,8 @@ import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
+import { LoadingIndicator } from '@/components/LoadingIndicator';
+import { motion } from 'framer-motion';
 
 type Quiz = {
   id: string;
@@ -142,26 +144,40 @@ export default function UserDashboard() {
   if (authLoading || isLoading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-        </div>
+        <LoadingIndicator 
+          size="lg" 
+          message="Loading your dashboard..."
+        />
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto space-y-8">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-6xl mx-auto space-y-8"
+      >
         <h1 className="text-3xl font-bold text-gray-900">My Dashboard</h1>
         
         {error && (
-          <div className="bg-red-50 p-4 rounded-md">
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-50 p-4 rounded-md"
+          >
             <p className="text-sm text-red-600">{error}</p>
-          </div>
+          </motion.div>
         )}
         
         {userAttempts.length > 0 && (
-          <div className="space-y-4">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
             <h2 className="text-xl font-medium text-gray-900">Your Quiz Progress</h2>
             <div className="bg-white shadow overflow-hidden rounded-lg border border-gray-200">
               <table className="min-w-full divide-y divide-gray-200">
@@ -221,10 +237,14 @@ export default function UserDashboard() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </motion.div>
         )}
         
-        <div className="space-y-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
           <h2 className="text-xl font-medium text-gray-900">Available Quizzes</h2>
           
           {availableQuizzes.length === 0 ? (
@@ -260,8 +280,8 @@ export default function UserDashboard() {
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </Layout>
   );
 } 
