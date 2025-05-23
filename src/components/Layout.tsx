@@ -108,12 +108,50 @@ export function Layout({ children }: LayoutProps) {
                     </span>
                   </>
                 )}
-                <button 
-                  onClick={() => signOut()}
-                  className="text-red-500 hover:text-red-700 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Sign Out
-                </button>
+                <div className="relative ml-3 group">
+                  <div className="cursor-pointer flex items-center">
+                    {userData?.profile_image ? (
+                      <img
+                        className="h-8 w-8 rounded-full object-cover border-2 border-purple-200"
+                        src={userData.profile_image}
+                        alt={userData.full_name || 'User'}
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-semibold border-2 border-purple-200">
+                        {(userData?.full_name?.[0] || userData?.email?.[0] || '?').toUpperCase()}
+                      </div>
+                    )}
+                    <span className="ml-2 text-sm font-medium text-gray-700 hidden md:block">
+                      {userData?.full_name || userData?.email?.split('@')[0] || 'User'}
+                    </span>
+                  </div>
+                  
+                  <div className="hidden group-hover:block absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                    <div className="px-4 py-2 text-sm text-gray-900 border-b border-gray-100">
+                      <p className="font-semibold truncate">{userData?.email}</p>
+                      <p className="text-xs text-gray-500 mt-1">{userData?.role}</p>
+                    </div>
+                    {isAdmin && (
+                      <a href="/admin/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Admin Dashboard
+                      </a>
+                    )}
+                    {isCreator && (
+                      <a href="/creator/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Edit Creator Profile
+                      </a>
+                    )}
+                    {!isAdmin && !isCreator && (
+                      <a href="/user/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Profile Settings
+                      </a>
+                    )}
+                    <a href="/" onClick={(e) => {e.preventDefault(); signOut();}} 
+                      className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                      Sign Out
+                    </a>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-4">

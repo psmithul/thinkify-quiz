@@ -1,36 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
-
+// Regular client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Types for our database
+// User types
 export type User = {
   id: string;
   email: string;
-  role: 'admin' | 'user' | 'creator';
-  full_name?: string;
-  bio?: string;
-  profile_image?: string;
-  created_at?: string;
+  role: string;
+  full_name?: string | null;
+  bio?: string | null;
+  profile_image?: string | null;
+  location?: string | null;
+  job_title?: string | null;
+  skills?: string[] | null;
+  created_at?: string | null;
 };
 
 export type Quiz = {
   id: string;
   title: string;
-  description: string;
-  created_at: string;
+  description?: string;
   creator_id?: string;
-  price?: number;
   is_published?: boolean;
-  category?: string;
+  price?: number;
+  created_at: string;
+  updated_at?: string;
 };
 
+// Admin client with service role key that bypasses RLS
+export const createAdminClient = () => {
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || '';
+  
+  if (!supabaseServiceKey) {
+    throw new Error('Missing SUPABASE_SERVICE_KEY environment variable');
+  }
+  
+  // Create client with auth options that disable auto session management
+  // This should ONLY be used server-side and never exposed to the client
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+};
+
+// Types for our database
 export type Question = {
   id: string;
   quiz_id: string;

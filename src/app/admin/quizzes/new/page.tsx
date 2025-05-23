@@ -31,19 +31,32 @@ export default function CreateQuizPage() {
     setError(null);
 
     try {
-      // Create new quiz
-      const { data, error: quizError } = await supabase
+      if (!user) {
+        throw new Error('You must be logged in to create a quiz');
+      }
+      
+      // Import the admin client to bypass RLS
+      const { createAdminClient } = await import('@/lib/supabaseClient');
+      const adminSupabase = createAdminClient();
+
+      // Create new quiz using admin client to bypass RLS
+      const { data, error: quizError } = await adminSupabase
         .from('quizzes')
         .insert([
           { 
             title: title.trim(),
-            description: description.trim() 
+            description: description.trim(),
+            creator_id: user.id,
+            is_published: false // default to unpublished
           }
         ])
         .select()
         .single();
 
-      if (quizError) throw quizError;
+      if (quizError) {
+        console.error('Error creating quiz:', quizError);
+        throw quizError;
+      }
       
       // Redirect to add questions page
       router.push(`/admin/quizzes/${data.id}/questions`);
