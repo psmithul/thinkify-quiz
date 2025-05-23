@@ -63,6 +63,9 @@ export function Layout({ children }: LayoutProps) {
                     }`}>
                       Admin Dashboard
                     </Link>
+                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-medium">
+                      Admin
+                    </span>
                   </>
                 ) : isCreator ? (
                   <>
@@ -80,6 +83,9 @@ export function Layout({ children }: LayoutProps) {
                     }`}>
                       My Creator Profile
                     </Link>
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                      Creator
+                    </span>
                   </>
                 ) : (
                   <>
@@ -97,11 +103,14 @@ export function Layout({ children }: LayoutProps) {
                     }`}>
                       My Profile
                     </Link>
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                      User
+                    </span>
                   </>
                 )}
                 <button 
                   onClick={() => signOut()}
-                  className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm"
+                  className="text-red-500 hover:text-red-700 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Sign Out
                 </button>
