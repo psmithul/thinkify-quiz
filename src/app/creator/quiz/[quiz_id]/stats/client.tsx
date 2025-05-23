@@ -48,11 +48,6 @@ export function QuizStats({ quizId }: { quizId: string }) {
       router.push('/auth/login');
       return;
     }
-    
-    if (!authLoading && user && user.role !== 'creator' && user.role !== 'admin') {
-      router.push('/user/dashboard');
-      return;
-    }
   }, [authLoading, user, router]);
 
   useEffect(() => {
