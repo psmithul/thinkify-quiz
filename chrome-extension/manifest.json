@@ -9,11 +9,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_icon": {
-      "16": "images/icon16.png",
-      "48": "images/icon48.png",
-      "128": "images/icon128.png"
-    }
+    "default_icon": "default_icon.png"
   },
   "content_scripts": [
     {
@@ -23,9 +19,9 @@
     }
   ],
   "icons": {
-    "16": "images/icon16.png",
-    "48": "images/icon48.png",
-    "128": "images/icon128.png"
+    "16": "default_icon.png",
+    "48": "default_icon.png",
+    "128": "default_icon.png"
   },
   "background": {
     "service_worker": "background.js"

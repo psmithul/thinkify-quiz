@@ -14,6 +14,7 @@ export function Layout({ children }: LayoutProps) {
   const { user, userData, isAdmin, signOut } = useAuth();
   const pathname = usePathname();
   const [dbTablesExist, setDbTablesExist] = useState<boolean>(true);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     // Check if essential tables exist
@@ -33,6 +34,19 @@ export function Layout({ children }: LayoutProps) {
 
   // Determine if user is a creator
   const isCreator = userData?.role === 'creator';
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.profile-dropdown')) {
+        setDropdownOpen(false);
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -108,8 +122,11 @@ export function Layout({ children }: LayoutProps) {
                     </span>
                   </>
                 )}
-                <div className="relative ml-3 group">
-                  <div className="cursor-pointer flex items-center">
+                <div className="relative ml-3 profile-dropdown">
+                  <div 
+                    className="cursor-pointer flex items-center" 
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                  >
                     {userData?.profile_image ? (
                       <img
                         className="h-8 w-8 rounded-full object-cover border-2 border-purple-200"
@@ -126,31 +143,36 @@ export function Layout({ children }: LayoutProps) {
                     </span>
                   </div>
                   
-                  <div className="hidden group-hover:block absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                    <div className="px-4 py-2 text-sm text-gray-900 border-b border-gray-100">
-                      <p className="font-semibold truncate">{userData?.email}</p>
-                      <p className="text-xs text-gray-500 mt-1">{userData?.role}</p>
+                  {dropdownOpen && (
+                    <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <div className="px-4 py-2 text-sm text-gray-900 border-b border-gray-100">
+                        <p className="font-semibold truncate">{userData?.email}</p>
+                        <p className="text-xs text-gray-500 mt-1">{userData?.role}</p>
+                      </div>
+                      {isAdmin && (
+                        <a href="/admin/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                          Admin Dashboard
+                        </a>
+                      )}
+                      {isCreator && (
+                        <a href="/creator/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                          Edit Creator Profile
+                        </a>
+                      )}
+                      {!isAdmin && !isCreator && (
+                        <a href="/user/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                          Profile Settings
+                        </a>
+                      )}
+                      <a 
+                        href="/" 
+                        onClick={(e) => {e.preventDefault(); signOut();}} 
+                        className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                      >
+                        Sign Out
+                      </a>
                     </div>
-                    {isAdmin && (
-                      <a href="/admin/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Admin Dashboard
-                      </a>
-                    )}
-                    {isCreator && (
-                      <a href="/creator/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Edit Creator Profile
-                      </a>
-                    )}
-                    {!isAdmin && !isCreator && (
-                      <a href="/user/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Profile Settings
-                      </a>
-                    )}
-                    <a href="/" onClick={(e) => {e.preventDefault(); signOut();}} 
-                      className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
-                      Sign Out
-                    </a>
-                  </div>
+                  )}
                 </div>
               </div>
             ) : (

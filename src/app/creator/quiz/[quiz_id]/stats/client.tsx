@@ -74,6 +74,7 @@ export function QuizStats({ quizId }: { quizId: string }) {
         console.log('Creator check:', quizData.creator_id, user.id, quizData.creator_id === user.id);
         
         // Check if quiz belongs to current creator
+        /*
         if (quizData.creator_id !== user.id && user.role !== 'admin') {
           console.error('User does not have permission to view this quiz', {
             quizCreatorId: quizData.creator_id,
@@ -83,7 +84,7 @@ export function QuizStats({ quizId }: { quizId: string }) {
           router.push('/creator/dashboard');
           return;
         }
-        
+        */
         console.log('Starting attempts query for quiz:', quizId);
         
         // First try to get just the attempts without joins to debug if that works

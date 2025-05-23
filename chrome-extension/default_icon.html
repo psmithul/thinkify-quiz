@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Default Icon</title>
+  <style>
+    canvas {
+      border: 1px solid #ccc;
+    }
+    button {
+      margin-top: 10px;
+      padding: 5px 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Default Icon Generator</h1>
+  <p>Click the button to create and download the default icon.</p>
+  
+  <canvas id="iconCanvas" width="128" height="128"></canvas>
+  <br>
+  <button onclick="downloadIcon()">Download Icon</button>
+  
+  <script>
+    // Draw icon
+    function drawIcon() {
+      const canvas = document.getElementById('iconCanvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Background
+      ctx.fillStyle = '#6B46C1'; // Purple background
+      ctx.fillRect(0, 0, 128, 128);
+      
+      // Q letter
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 80px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Q', 64, 64);
+    }
+    
+    // Download icon
+    function downloadIcon() {
+      const canvas = document.getElementById('iconCanvas');
+      const link = document.createElement('a');
+      link.download = 'default_icon.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+    
+    // Draw the icon when the page loads
+    window.onload = drawIcon;
+  </script>
+</body>
+</html> 
