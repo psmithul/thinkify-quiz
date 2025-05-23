@@ -89,15 +89,60 @@ export function QuizStats({ quizId }: { quizId: string }) {
           return;
         }
         
-        // Fetch quiz results with user details
+        console.log('Starting attempts query for quiz:', quizId);
+        
+        // First try to get just the attempts without joins to debug if that works
+        const { data: simpleAttempts, error: simpleError } = await supabase
+          .from('quiz_attempts')
+          .select('id, user_id, quiz_id, score, completed_at')
+          .eq('quiz_id', quizId);
+          
+        console.log('Simple attempts query result:', { data: simpleAttempts, error: simpleError });
+        
+        // Then try the full query with users join
         const { data: attemptsData, error: attemptsError } = await supabase
           .from('quiz_attempts')
-          .select('*, users:user_id(id, email, full_name)')
+          .select('*, users!inner(id, email, full_name)')
           .eq('quiz_id', quizId)
           .order('completed_at', { ascending: false });
           
         if (attemptsError) {
           console.error('Error fetching attempts data:', attemptsError);
+          
+          // If the join query fails, let's use the simple query data instead
+          if (simpleAttempts) {
+            console.log('Using simple attempts data as fallback');
+            
+            // Process attempts without user data
+            const fallbackAttempts = simpleAttempts.map(attempt => ({
+              ...attempt,
+              user: {
+                id: attempt.user_id,
+                email: 'User ID: ' + attempt.user_id,
+                full_name: 'Anonymous User'
+              }
+            }));
+            
+            setAttempts(fallbackAttempts);
+            
+            // Calculate stats with fallback data
+            const completionCount = fallbackAttempts.length;
+            const totalScore = fallbackAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
+            const averageScore = completionCount > 0 ? totalScore / completionCount : 0;
+            const passCount = fallbackAttempts.filter(attempt => getEligibilityTier(attempt.score).tier >= 3).length;
+            const passRate = completionCount > 0 ? (passCount / completionCount) * 100 : 0;
+            
+            setQuiz({
+              ...quizData,
+              attempts: fallbackAttempts,
+              completion_count: completionCount,
+              average_score: averageScore,
+              pass_rate: passRate
+            });
+            
+            return;
+          }
+          
           throw attemptsError;
         }
         
