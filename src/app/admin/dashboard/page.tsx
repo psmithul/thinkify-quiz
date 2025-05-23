@@ -58,27 +58,34 @@ export default function AdminDashboard() {
         setUsers(usersData);
 
         // Fetch all quiz attempts to see which quizzes have been completed
-        const { data: attemptsData, error: attemptsError } = await supabase
+        // Use count() to get the number of attempts per quiz
+        const { data: attemptsCountData, error: attemptsCountError } = await supabase
           .from('quiz_attempts')
           .select('quiz_id, count')
           .is('completed', true)
           .or('completed.eq.true,completed.is.null');
           
-        if (attemptsError) throw attemptsError;
+        if (attemptsCountError) throw attemptsCountError;
         
-        console.log('Quiz attempts found:', attemptsData);
+        console.log('Quiz attempts found:', attemptsCountData);
         
         // Initialize count map for assignments and completed attempts
         const countMap: Record<string, number> = {};
         
-        // Add all quizzes with attempts to the map
-        if (attemptsData) {
-          for (const attempt of attemptsData) {
+        // Create a count per quiz ID
+        const attemptsByQuiz: Record<string, number> = {};
+        if (attemptsCountData) {
+          for (const attempt of attemptsCountData) {
             if (attempt.quiz_id) {
-              countMap[attempt.quiz_id] = (countMap[attempt.quiz_id] || 0) + 1;
+              attemptsByQuiz[attempt.quiz_id] = (attemptsByQuiz[attempt.quiz_id] || 0) + 1;
             }
           }
         }
+        
+        // Add quiz attempts to the count map
+        Object.keys(attemptsByQuiz).forEach(quizId => {
+          countMap[quizId] = attemptsByQuiz[quizId];
+        });
         
         // Fetch all assignments (this will add to counts for quizzes that were assigned but not yet attempted)
         const { data: assignmentsData, error: assignmentsError } = await supabase

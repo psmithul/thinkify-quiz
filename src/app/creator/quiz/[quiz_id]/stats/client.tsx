@@ -92,10 +92,7 @@ export function QuizStats({ quizId }: { quizId: string }) {
         // Fetch quiz results with user details
         const { data: attemptsData, error: attemptsError } = await supabase
           .from('quiz_attempts')
-          .select(`
-            *,
-            user:users(id, email, full_name)
-          `)
+          .select('*, users:user_id(id, email, full_name)')
           .eq('quiz_id', quizId)
           .order('completed_at', { ascending: false });
           
@@ -104,19 +101,29 @@ export function QuizStats({ quizId }: { quizId: string }) {
           throw attemptsError;
         }
         
-        console.log('Attempts data:', attemptsData);
-        setAttempts(attemptsData || []);
+        // Process the attempt data to match our expected format
+        const processedAttempts = attemptsData?.map(attempt => ({
+          id: attempt.id,
+          user_id: attempt.user_id,
+          quiz_id: attempt.quiz_id,
+          score: attempt.score,
+          completed_at: attempt.completed_at,
+          user: attempt.users
+        })) || [];
+        
+        console.log('Processed attempts data:', processedAttempts);
+        setAttempts(processedAttempts);
         
         // Calculate stats
-        const completionCount = attemptsData?.length || 0;
-        const totalScore = attemptsData?.reduce((sum, attempt) => sum + attempt.score, 0) || 0;
+        const completionCount = processedAttempts.length;
+        const totalScore = processedAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
         const averageScore = completionCount > 0 ? totalScore / completionCount : 0;
-        const passCount = attemptsData?.filter(attempt => getEligibilityTier(attempt.score).tier >= 3).length || 0;
+        const passCount = processedAttempts.filter(attempt => getEligibilityTier(attempt.score).tier >= 3).length;
         const passRate = completionCount > 0 ? (passCount / completionCount) * 100 : 0;
         
         setQuiz({
           ...quizData,
-          attempts: attemptsData || [],
+          attempts: processedAttempts,
           completion_count: completionCount,
           average_score: averageScore,
           pass_rate: passRate
