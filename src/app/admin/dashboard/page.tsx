@@ -7,6 +7,8 @@ import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/authContext';
 import { supabase, Quiz, User } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
+import { LoadingIndicator } from '@/components/LoadingIndicator';
+import { motion } from 'framer-motion';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -55,15 +57,36 @@ export default function AdminDashboard() {
         if (userError) throw userError;
         setUsers(usersData);
 
-        // Fetch all assignments
+        // Fetch all quiz attempts to see which quizzes have been completed
+        const { data: attemptsData, error: attemptsError } = await supabase
+          .from('quiz_attempts')
+          .select('quiz_id, count')
+          .is('completed', true)
+          .or('completed.eq.true,completed.is.null');
+          
+        if (attemptsError) throw attemptsError;
+        
+        console.log('Quiz attempts found:', attemptsData);
+        
+        // Initialize count map for assignments and completed attempts
+        const countMap: Record<string, number> = {};
+        
+        // Add all quizzes with attempts to the map
+        if (attemptsData) {
+          for (const attempt of attemptsData) {
+            if (attempt.quiz_id) {
+              countMap[attempt.quiz_id] = (countMap[attempt.quiz_id] || 0) + 1;
+            }
+          }
+        }
+        
+        // Fetch all assignments (this will add to counts for quizzes that were assigned but not yet attempted)
         const { data: assignmentsData, error: assignmentsError } = await supabase
           .from('assignments')
           .select('quiz_id');
 
         if (assignmentsError) throw assignmentsError;
         
-        // Count assignments per quiz
-        const countMap: Record<string, number> = {};
         if (assignmentsData) {
           for (const item of assignmentsData) {
             if (item.quiz_id) {
@@ -249,16 +272,23 @@ export default function AdminDashboard() {
   if (authLoading || isLoading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-        </div>
+        <LoadingIndicator 
+          size="lg" 
+          message="Loading admin dashboard..."
+          color="purple"
+        />
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="space-y-8">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="space-y-8"
+      >
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
           <Button onClick={handleCreateQuiz}>Create New Quiz</Button>
@@ -474,7 +504,7 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </Layout>
   );
 } 

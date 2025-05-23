@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/authContext';
 import { supabase, Quiz } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import { getEligibilityTier } from '@/app/user/quiz/[quiz_id]/client';
+import { LoadingIndicator } from '@/components/LoadingIndicator';
+import { motion } from 'framer-motion';
 
 // Define QuizAttempt type to replace the old Result type
 type QuizAttempt = {
@@ -134,16 +136,22 @@ export function QuizStats({ quizId }: { quizId: string }) {
   if (authLoading || isLoading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-        </div>
+        <LoadingIndicator 
+          size="lg" 
+          message="Loading quiz statistics..."
+        />
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto space-y-8">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-6xl mx-auto space-y-8"
+      >
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Quiz Statistics</h1>
           <div className="flex space-x-4">
@@ -244,7 +252,7 @@ export function QuizStats({ quizId }: { quizId: string }) {
             </div>
           </>
         )}
-      </div>
+      </motion.div>
     </Layout>
   );
 } 
