@@ -57,30 +57,26 @@ export default function AdminDashboard() {
         if (userError) throw userError;
         setUsers(usersData);
 
-        // Fetch all quiz attempts to see which quizzes have been completed
-        // Use count() to get the number of attempts per quiz
-        const { data: attemptsCountData, error: attemptsCountError } = await supabase
+        // Get all completed quiz attempts - change the approach entirely
+        const { data: quizAttempts, error: attemptsError } = await supabase
           .from('quiz_attempts')
-          .select('quiz_id, count')
-          .is('completed', true)
-          .or('completed.eq.true,completed.is.null');
+          .select('*')
+          .is('completed', true);
           
-        if (attemptsCountError) throw attemptsCountError;
+        if (attemptsError) throw attemptsError;
         
-        console.log('Quiz attempts found:', attemptsCountData);
+        // Count attempts per quiz manually without relying on SQL GROUP BY
+        const attemptsByQuiz: Record<string, number> = {};
+        if (quizAttempts) {
+          for (const attempt of quizAttempts) {
+            attemptsByQuiz[attempt.quiz_id] = (attemptsByQuiz[attempt.quiz_id] || 0) + 1;
+          }
+        }
+        
+        console.log('Quiz attempts found:', attemptsByQuiz);
         
         // Initialize count map for assignments and completed attempts
         const countMap: Record<string, number> = {};
-        
-        // Create a count per quiz ID
-        const attemptsByQuiz: Record<string, number> = {};
-        if (attemptsCountData) {
-          for (const attempt of attemptsCountData) {
-            if (attempt.quiz_id) {
-              attemptsByQuiz[attempt.quiz_id] = (attemptsByQuiz[attempt.quiz_id] || 0) + 1;
-            }
-          }
-        }
         
         // Add quiz attempts to the count map
         Object.keys(attemptsByQuiz).forEach(quizId => {

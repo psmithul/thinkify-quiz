@@ -287,20 +287,27 @@ export default function CreatorDashboard() {
                         <div className="text-sm text-gray-500">
                           {quiz.price ? `$${quiz.price.toFixed(2)}` : 'Free'}
                         </div>
-                        <div className="flex space-x-2">
-                          <Button 
-                            variant="outline" 
+                        <div className="absolute bottom-4 right-4 flex space-x-2">
+                          <Button
                             size="sm"
+                            variant="outline"
                             onClick={() => router.push(`/creator/quiz/${quiz.id}/edit`)}
                           >
                             Edit
                           </Button>
-                          <Button 
-                            variant="outline" 
+                          <Button
                             size="sm"
+                            variant="outline" 
+                            onClick={() => router.push(`/creator/quiz/${quiz.id}`)}
+                          >
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => router.push(`/creator/quiz/${quiz.id}/stats`)}
                           >
-                            Stats
+                            Results
                           </Button>
                         </div>
                       </div>
