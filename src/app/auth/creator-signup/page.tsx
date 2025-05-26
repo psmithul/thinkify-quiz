@@ -28,6 +28,12 @@ export default function CreatorSignupPage() {
     setDebug(null);
 
     // Basic validation
+    if (!fullName.trim()) {
+      setError('Full name is required');
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
@@ -70,7 +76,7 @@ export default function CreatorSignupPage() {
             id: authData.user.id, 
             email, 
             role: 'creator',
-            full_name: fullName || null,
+            full_name: fullName.trim(),
             bio: bio || null,
             profile_image: profileImage || null
           }

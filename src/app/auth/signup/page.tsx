@@ -26,6 +26,12 @@ export default function SignupPage() {
     setError(null);
 
     // Basic validation
+    if (!fullName.trim()) {
+      setError('Full name is required');
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
@@ -54,7 +60,7 @@ export default function SignupPage() {
             id: authData.user.id, 
             email, 
             role: isCreator ? 'creator' : 'user',
-            full_name: fullName || null
+            full_name: fullName.trim()
           }
         ]);
         
@@ -100,9 +106,10 @@ export default function SignupPage() {
               name="fullName"
               type="text"
               autoComplete="name"
+              required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              helper="Optional, but recommended for creators"
+              helper="Required - will appear on your certificates and profile"
             />
 
             <Input

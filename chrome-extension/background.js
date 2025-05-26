@@ -1,57 +1,145 @@
-// Background script for Quiz App Job Companion
+// Thinkify Quiz Recommender - Background Service Worker
 
-// Run when the extension is installed
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('Quiz App Job Companion installed');
+// Installation handler
+chrome.runtime.onInstalled.addListener((details) => {
+  console.log('Thinkify Quiz Recommender installed/updated');
   
-  // Initialize storage with default settings
-  chrome.storage.sync.set({
-    enabled: true,
-    quizUrls: {
-      "react-quiz": "react-fundamentals-quiz",
-      "js-quiz": "javascript-core-concepts",
-      "angular-quiz": "angular-essentials"
-    }
+  if (details.reason === 'install') {
+    // Set default settings
+    chrome.storage.local.set({
+      isEnabled: true,
+      showRelevanceScore: true,
+      maxRecommendations: 3,
+      quizClicks: []
+    });
+    
+    // Open welcome page
+    chrome.tabs.create({
+      url: 'https://thinkify-quiz.vercel.app/welcome-extension'
+    });
+  }
+});
+
+// Handle messages from content script or popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  switch (request.action) {
+    case 'getSettings':
+      chrome.storage.local.get(['isEnabled', 'showRelevanceScore', 'maxRecommendations'], (result) => {
+        sendResponse(result);
+      });
+      return true; // Will respond asynchronously
+      
+    case 'updateSettings':
+      chrome.storage.local.set(request.settings, () => {
+        sendResponse({ success: true });
+      });
+      return true;
+      
+    case 'getAnalytics':
+      chrome.storage.local.get(['quizClicks'], (result) => {
+        const clicks = result.quizClicks || [];
+        const analytics = processAnalytics(clicks);
+        sendResponse(analytics);
+      });
+      return true;
+      
+    case 'clearAnalytics':
+      chrome.storage.local.set({ quizClicks: [] }, () => {
+        sendResponse({ success: true });
+      });
+      return true;
+      
+    default:
+      sendResponse({ error: 'Unknown action' });
+  }
+});
+
+// Process analytics data
+function processAnalytics(clicks) {
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const weekMs = 7 * dayMs;
+  const monthMs = 30 * dayMs;
+  
+  const today = clicks.filter(click => now - click.timestamp < dayMs);
+  const thisWeek = clicks.filter(click => now - click.timestamp < weekMs);
+  const thisMonth = clicks.filter(click => now - click.timestamp < monthMs);
+  
+  // Count quiz types
+  const quizTypeCounts = {};
+  clicks.forEach(click => {
+    const type = extractQuizType(click.quizTitle);
+    quizTypeCounts[type] = (quizTypeCounts[type] || 0) + 1;
   });
-});
+  
+  return {
+    totalClicks: clicks.length,
+    clicksToday: today.length,
+    clicksThisWeek: thisWeek.length,
+    clicksThisMonth: thisMonth.length,
+    quizTypeCounts,
+    lastUpdated: now
+  };
+}
 
-// Listen for tab updates
+// Extract quiz type from title
+function extractQuizType(title) {
+  const lowerTitle = title.toLowerCase();
+  if (lowerTitle.includes('react')) return 'React';
+  if (lowerTitle.includes('vue')) return 'Vue.js';
+  if (lowerTitle.includes('angular')) return 'Angular';
+  if (lowerTitle.includes('node')) return 'Node.js';
+  if (lowerTitle.includes('django')) return 'Django';
+  if (lowerTitle.includes('spring')) return 'Spring Boot';
+  if (lowerTitle.includes('python')) return 'Python';
+  if (lowerTitle.includes('javascript')) return 'JavaScript';
+  if (lowerTitle.includes('sql')) return 'SQL';
+  if (lowerTitle.includes('aws')) return 'AWS';
+  return 'Other';
+}
+
+// Handle tab updates to detect LinkedIn job pages
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Only proceed if the URL contains LinkedIn jobs
-  if (changeInfo.status === 'complete' && tab.url && tab.url.includes('linkedin.com/jobs')) {
-    chrome.storage.sync.get('enabled', (data) => {
-      if (data.enabled) {
-        // Notify the content script to check for job listings
-        chrome.tabs.sendMessage(tabId, { action: 'checkForJobs' })
-          .catch(err => {
-            // Content script might not be loaded yet, which is expected
-            console.log('Could not send message to tab', err);
-          });
-      }
-    });
+  if (changeInfo.status === 'complete' && tab.url) {
+    const isLinkedInJob = tab.url.includes('linkedin.com/jobs/');
+    
+    if (isLinkedInJob) {
+      // Update badge to show extension is active
+      chrome.action.setBadgeText({
+        text: '🎯',
+        tabId: tabId
+      });
+      
+      chrome.action.setBadgeBackgroundColor({
+        color: '#667eea'
+      });
+    } else {
+      // Clear badge for non-job pages
+      chrome.action.setBadgeText({
+        text: '',
+        tabId: tabId
+      });
+    }
   }
 });
 
-// Handle messages from popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'getStatus') {
-    chrome.storage.sync.get('enabled', (data) => {
-      sendResponse({ enabled: data.enabled });
-    });
-    return true; // Required for async response
+// Alarm for periodic cleanup
+chrome.alarms.create('cleanupAnalytics', { periodInMinutes: 60 * 24 }); // Daily
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'cleanupAnalytics') {
+    cleanupOldAnalytics();
   }
-  
-  if (message.action === 'toggleEnabled') {
-    chrome.storage.sync.set({ enabled: message.enabled }, () => {
-      sendResponse({ success: true });
-    });
-    return true; // Required for async response
-  }
-  
-  if (message.action === 'updateQuizUrls') {
-    chrome.storage.sync.set({ quizUrls: message.quizUrls }, () => {
-      sendResponse({ success: true });
-    });
-    return true; // Required for async response
-  }
-}); 
+});
+
+// Clean up analytics data older than 3 months
+function cleanupOldAnalytics() {
+  chrome.storage.local.get(['quizClicks'], (result) => {
+    const clicks = result.quizClicks || [];
+    const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    
+    const recentClicks = clicks.filter(click => click.timestamp > threeMonthsAgo);
+    
+    chrome.storage.local.set({ quizClicks: recentClicks });
+  });
+} 
