@@ -19,7 +19,7 @@ export default function LinkedInCallbackHandler() {
         console.log('LinkedIn callback received:', {
           code: code ? code.substring(0, 10) + '...' : null,
           error,
-          fullUrl: window.location.href
+          fullUrl: typeof window !== 'undefined' ? window.location.href : 'SSR'
         });
         
         if (error) {
@@ -56,6 +56,17 @@ export default function LinkedInCallbackHandler() {
         
         setMessage('Creating your profile with LinkedIn data...');
         
+        // Check if user came from creator signup (check referrer or local storage)
+        // Only access browser APIs if we're in the browser
+        let isCreatorSignup = false;
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          isCreatorSignup = document.referrer.includes('/auth/creator-signup') || 
+                           window.localStorage.getItem('linkedin_creator_signup') === 'true';
+          
+          // Clear localStorage flag if it exists
+          window.localStorage.removeItem('linkedin_creator_signup');
+        }
+        
         // Extract LinkedIn profile data with fallbacks
         const profileData = {
           id: data.user.id,
@@ -67,12 +78,21 @@ export default function LinkedInCallbackHandler() {
           profile_image: data.user.user_metadata?.picture || 
                         data.user.user_metadata?.avatar_url,
           linkedin_url: data.user.user_metadata?.linkedin_url,
-          role: 'user', // Default role for new LinkedIn users
+          role: isCreatorSignup ? 'creator' : 'user', // Assign role based on signup context
+          // Extract additional LinkedIn data if available
+          job_title: data.user.user_metadata?.job_title || 
+                    data.user.user_metadata?.headline,
+          location: data.user.user_metadata?.location,
+          bio: data.user.user_metadata?.summary,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
         
-        console.log('Prepared profile data:', profileData);
+        console.log('Prepared profile data:', {
+          ...profileData,
+          isCreatorSignup,
+          role: profileData.role
+        });
         
         // Update or create user profile in our users table
         const { data: userData, error: profileError } = await supabase
@@ -92,7 +112,7 @@ export default function LinkedInCallbackHandler() {
         console.log('User profile created/updated successfully:', userData);
         
         setStatus('success');
-        setMessage('LinkedIn authentication successful! Welcome to Thinkify!');
+        setMessage(`LinkedIn authentication successful! Welcome to Thinkify${userData.role === 'creator' ? ' as a creator' : ''}!`);
         
         // Determine redirect based on user role
         const redirectUrl = userData.role === 'admin' ? '/admin/dashboard' : 

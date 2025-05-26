@@ -57,7 +57,7 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'linkedin_oidc',
         options: {
-          redirectTo: `${window.location.origin}/auth/linkedin/callback`,
+          redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/linkedin/callback`,
           scopes: 'openid profile email'
         }
       });
@@ -67,7 +67,7 @@ export default function LoginPage() {
         throw error;
       }
 
-      console.log('LinkedIn OAuth initiated successfully');
+      console.log('LinkedIn OAuth login initiated successfully');
       // The redirect will happen automatically via Supabase
       
     } catch (err) {

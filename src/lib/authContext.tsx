@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Handle redirects based on user role
   useEffect(() => {
-    if (!isLoading && userData) {
+    if (!isLoading && userData && typeof window !== 'undefined') {
       const path = window.location.pathname;
       
       // Redirect if user is on a page they shouldn't access
@@ -206,8 +206,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      // Force navigation to home page
-      window.location.href = '/';
+      // Force navigation to home page only in browser
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
     } catch (error) {
       console.error('Error signing out:', error);
     }
