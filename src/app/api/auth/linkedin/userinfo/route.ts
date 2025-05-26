@@ -31,7 +31,13 @@ export async function POST(request: NextRequest) {
     
     // Use the redirect URI that was passed from the client
     // This MUST match exactly what was used in the initial OAuth request
-    const actualRedirectUri = redirectUri || 'http://localhost:3001/auth/linkedin/callback';
+    const actualRedirectUri = redirectUri || 
+      (process.env.NEXT_PUBLIC_APP_URL ? 
+        `${process.env.NEXT_PUBLIC_APP_URL}/auth/linkedin/callback` : 
+        'http://localhost:3001/auth/linkedin/callback');
+    
+    console.log('Using redirect URI:', actualRedirectUri);
+    console.log('Environment APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
     
     if (!clientId || !clientSecret) {
       console.error('LinkedIn OAuth env vars missing:', { 

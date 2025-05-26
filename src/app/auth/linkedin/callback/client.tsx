@@ -256,9 +256,13 @@ export default function LinkedInCallbackClient() {
   async function exchangeCodeForUserData(code: string) {
     try {
       // Use the EXACT same redirect URI that was used in the initial OAuth request
-      const redirectUri = 'http://localhost:3001/auth/linkedin/callback';
+      // Dynamically determine based on environment
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                     (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
+      const redirectUri = `${baseUrl}/auth/linkedin/callback`;
       
       console.log('Exchanging code with redirect URI:', redirectUri);
+      console.log('Base URL:', baseUrl);
       console.log('Code length:', code.length);
       console.log('Code preview:', code.substring(0, 20) + '...');
       

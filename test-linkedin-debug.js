@@ -3,151 +3,157 @@
 // Debug script to test LinkedIn OAuth flow
 import fetch from 'node-fetch';
 
-async function testLinkedInOAuth() {
-  console.log('🔍 Testing LinkedIn OAuth Configuration...\n');
-  
-  // Environment variables from .env.local
-  const clientId = '865iwdnmx2n4fy';
-  const clientSecret = 'WPL_AP1.Zbs0nWg0clHhyAzC.t0scVw==';
-  const redirectUri = 'http://localhost:3001/auth/linkedin/callback';
-  
-  console.log('📋 Configuration:');
-  console.log(`   Client ID: ${clientId}`);
-  console.log(`   Client Secret: ${clientSecret.substring(0, 10)}...`);
-  console.log(`   Redirect URI: ${redirectUri}\n`);
-  
-  // Step 1: Show the authorization URL
+const CLIENT_ID = '865iwdnmx2n4fy';
+const CLIENT_SECRET = 'WPL_AP1.Zbs0nWg0clHhyAzC.t0scVw==';
+
+// Support both local and production URLs
+const LOCAL_REDIRECT_URI = 'http://localhost:3001/auth/linkedin/callback';
+const PRODUCTION_REDIRECT_URI = 'https://thinkify-quiz.vercel.app/auth/linkedin/callback';
+
+// Choose which environment to test
+const ENVIRONMENT = process.env.NODE_ENV === 'production' ? 'production' : 'local';
+const REDIRECT_URI = ENVIRONMENT === 'production' ? PRODUCTION_REDIRECT_URI : LOCAL_REDIRECT_URI;
+const BASE_URL = ENVIRONMENT === 'production' ? 'https://thinkify-quiz.vercel.app' : 'http://localhost:3001';
+
+console.log(`\n🔍 LinkedIn OAuth Debug Script - ${ENVIRONMENT.toUpperCase()} Environment`);
+console.log('='.repeat(60));
+
+// Step 1: Generate LinkedIn Authorization URL
+function generateLinkedInAuthUrl() {
   const scope = 'openid profile email';
   const state = Math.random().toString(36).substring(2, 15);
   
   const authUrl = `https://www.linkedin.com/oauth/v2/authorization?` +
     `response_type=code&` +
-    `client_id=${clientId}&` +
-    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+    `client_id=${CLIENT_ID}&` +
+    `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
     `scope=${encodeURIComponent(scope)}&` +
     `state=${state}`;
   
-  console.log('🔗 Authorization URL:');
-  console.log(authUrl);
-  console.log('\n📝 Manual Test Steps:');
-  console.log('1. Open the above URL in your browser');
-  console.log('2. Complete LinkedIn authorization');
-  console.log('3. Copy the "code" parameter from the callback URL');
-  console.log('4. Test token exchange with that code\n');
+  console.log('\n📋 Configuration:');
+  console.log(`Environment: ${ENVIRONMENT}`);
+  console.log(`Base URL: ${BASE_URL}`);
+  console.log(`Redirect URI: ${REDIRECT_URI}`);
+  console.log(`Client ID: ${CLIENT_ID}`);
+  console.log(`Scope: ${scope}`);
+  console.log(`State: ${state}`);
   
-  // If a code is provided as argument, test token exchange
-  const code = process.argv[2];
-  if (code) {
-    console.log(`🔄 Testing token exchange with code: ${code.substring(0, 10)}...`);
-    await testTokenExchange(code, redirectUri, clientId, clientSecret);
-  } else {
-    console.log('💡 To test token exchange, run: node test-linkedin-debug.js YOUR_AUTH_CODE');
-  }
+  console.log('\n🔗 LinkedIn Authorization URL:');
+  console.log(authUrl);
+  
+  console.log('\n📝 Instructions:');
+  console.log('1. Copy the URL above and paste it in your browser');
+  console.log('2. Complete the LinkedIn OAuth flow');
+  console.log('3. Copy the "code" parameter from the callback URL');
+  console.log('4. Run: node test-linkedin-debug.js <authorization_code>');
+  console.log(`5. Make sure your LinkedIn app has ${REDIRECT_URI} in its redirect URIs`);
+  
+  return authUrl;
 }
 
-async function testTokenExchange(code, redirectUri, clientId, clientSecret) {
+// Step 2: Test Token Exchange
+async function testTokenExchange(authCode) {
+  console.log('\n🔄 Testing Token Exchange...');
+  console.log(`Code: ${authCode.substring(0, 20)}...`);
+  console.log(`Redirect URI: ${REDIRECT_URI}`);
+  
   try {
-    console.log('\n🔄 Step 1: Exchanging code for access token...');
-    
-    const tokenParams = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-      client_id: clientId,
-      client_secret: clientSecret,
-    });
-    
-    console.log('📤 Token request details:');
-    console.log(`   URL: https://www.linkedin.com/oauth/v2/accessToken`);
-    console.log(`   Method: POST`);
-    console.log(`   Content-Type: application/x-www-form-urlencoded`);
-    console.log(`   Body parameters:`);
-    console.log(`     grant_type: authorization_code`);
-    console.log(`     code: ${code.substring(0, 10)}...`);
-    console.log(`     redirect_uri: ${redirectUri}`);
-    console.log(`     client_id: ${clientId}`);
-    console.log(`     client_secret: [HIDDEN]`);
-    
     const tokenResponse = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
       },
-      body: tokenParams,
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: authCode,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI,
+      }),
     });
-    
-    const tokenResponseText = await tokenResponse.text();
-    
-    console.log(`\n📥 Token response:`);
-    console.log(`   Status: ${tokenResponse.status} ${tokenResponse.statusText}`);
-    console.log(`   Headers:`, Object.fromEntries(tokenResponse.headers.entries()));
-    
+
+    console.log(`Token Response Status: ${tokenResponse.status}`);
+    const tokenData = await tokenResponse.text();
+    console.log(`Token Response: ${tokenData}`);
+
     if (!tokenResponse.ok) {
-      console.log(`❌ Token exchange failed!`);
-      console.log(`   Response body: ${tokenResponseText}`);
-      
-      // Try to parse error details
+      console.error('❌ Token exchange failed');
       try {
-        const errorData = JSON.parse(tokenResponseText);
-        console.log(`   Parsed error:`, errorData);
+        const errorData = JSON.parse(tokenData);
+        console.error('Error details:', errorData);
       } catch (e) {
-        console.log(`   Raw error response: ${tokenResponseText}`);
+        console.error('Raw error:', tokenData);
       }
-      return;
+      return null;
     }
+
+    const tokens = JSON.parse(tokenData);
+    console.log('✅ Token exchange successful');
+    console.log(`Access Token: ${tokens.access_token?.substring(0, 20)}...`);
     
-    const tokenData = JSON.parse(tokenResponseText);
-    console.log(`✅ Token exchange successful!`);
-    console.log(`   Access token: ${tokenData.access_token ? '[PRESENT]' : '[MISSING]'}`);
-    console.log(`   Token type: ${tokenData.token_type}`);
-    console.log(`   Expires in: ${tokenData.expires_in} seconds`);
-    console.log(`   Scope: ${tokenData.scope}`);
-    
-    if (tokenData.access_token) {
-      console.log('\n🔄 Step 2: Fetching user profile...');
-      await testUserProfile(tokenData.access_token);
-    }
-    
+    return tokens.access_token;
   } catch (error) {
-    console.error('❌ Token exchange error:', error);
+    console.error('❌ Token exchange error:', error.message);
+    return null;
   }
 }
 
-async function testUserProfile(accessToken) {
+// Step 3: Test User Info Endpoint
+async function testUserInfo(accessToken) {
+  console.log('\n👤 Testing User Info...');
+  
   try {
-    const profileResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
+    const userResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
       },
     });
-    
-    const profileResponseText = await profileResponse.text();
-    
-    console.log(`📥 Profile response:`);
-    console.log(`   Status: ${profileResponse.status} ${profileResponse.statusText}`);
-    
-    if (!profileResponse.ok) {
-      console.log(`❌ Profile fetch failed!`);
-      console.log(`   Response: ${profileResponseText}`);
-      return;
+
+    console.log(`User Info Response Status: ${userResponse.status}`);
+    const userData = await userResponse.text();
+    console.log(`User Info Response: ${userData}`);
+
+    if (!userResponse.ok) {
+      console.error('❌ User info fetch failed');
+      return null;
     }
+
+    const user = JSON.parse(userData);
+    console.log('✅ User info fetch successful');
+    console.log('User data:', {
+      id: user.sub,
+      email: user.email,
+      name: user.name,
+      given_name: user.given_name,
+      family_name: user.family_name,
+      picture: user.picture
+    });
     
-    const profile = JSON.parse(profileResponseText);
-    console.log(`✅ Profile fetch successful!`);
-    console.log(`   User ID (sub): ${profile.sub}`);
-    console.log(`   Email: ${profile.email || '[MISSING]'}`);
-    console.log(`   Name: ${profile.name || '[MISSING]'}`);
-    console.log(`   Given name: ${profile.given_name || '[MISSING]'}`);
-    console.log(`   Family name: ${profile.family_name || '[MISSING]'}`);
-    console.log(`   Picture: ${profile.picture ? '[PRESENT]' : '[MISSING]'}`);
-    console.log(`   Email verified: ${profile.email_verified}`);
-    
+    return user;
   } catch (error) {
-    console.error('❌ Profile fetch error:', error);
+    console.error('❌ User info error:', error.message);
+    return null;
   }
 }
 
-// Run the test
-testLinkedInOAuth().catch(console.error); 
+// Main execution
+async function main() {
+  const authCode = process.argv[2];
+  
+  if (!authCode) {
+    generateLinkedInAuthUrl();
+    return;
+  }
+  
+  console.log(`\n🚀 Testing LinkedIn OAuth with code: ${authCode.substring(0, 20)}...`);
+  
+  const accessToken = await testTokenExchange(authCode);
+  if (accessToken) {
+    await testUserInfo(accessToken);
+  }
+  
+  console.log('\n' + '='.repeat(60));
+  console.log('✅ Debug session complete');
+}
+
+main().catch(console.error); 

@@ -48,8 +48,11 @@ export default function LoginPage() {
         throw new Error('LinkedIn OAuth is not configured. Please contact the administrator.');
       }
       
-      // Use a fixed localhost URL for consistency with LinkedIn app configuration
-      const redirectUri = 'http://localhost:3001/auth/linkedin/callback';
+      // Dynamically determine the redirect URI based on environment
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                     (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
+      const redirectUri = `${baseUrl}/auth/linkedin/callback`;
+      
       // Use OpenID Connect scopes as per Microsoft documentation
       // https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2
       const scope = 'openid profile email';
@@ -63,7 +66,8 @@ export default function LoginPage() {
         clientId: clientId.substring(0, 10) + '...',
         redirectUri,
         scope,
-        state: state.substring(0, 5) + '...'
+        state: state.substring(0, 5) + '...',
+        baseUrl
       });
       
       const linkedInAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?` +
