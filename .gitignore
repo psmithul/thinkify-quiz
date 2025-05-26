@@ -4,6 +4,7 @@
 /node_modules
 /.pnp
 .pnp.js
+.yarn/install-state.gz
 
 # testing
 /coverage
@@ -24,9 +25,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*.local
-
 # vercel
 .vercel
 
@@ -34,10 +32,36 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# IDE files
+# environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Lock files
-yarn.lock
-package-lock.json
+# OS generated files
+Thumbs.db
+
+# Debug and test files
+*debug*
+*test-*
+debug.html
+*.log
+
+# Documentation build artifacts
+docs/build/
+
+# Chrome extension development files
+chrome-extension/.DS_Store
+chrome-extension/icons-temp/
+chrome-extension/images/temp/
+
+# Database backup files
+*.sql.backup
+*.db.backup

@@ -70,18 +70,18 @@ export default function CreatorDashboard() {
         
         // Fetch quizzes
         const { data: quizzesData, error: quizzesError } = await supabase
-          .from('quizzes')
-          .select('*')
-          .eq('creator_id', user.id)
-          .order('created_at', { ascending: false });
+              .from('quizzes')
+              .select('*')
+              .eq('creator_id', user.id)
+              .order('created_at', { ascending: false });
 
-        if (quizzesError) {
-          console.error('Error fetching quizzes:', quizzesError);
-          setQuizzes([]);
-        } else {
-          console.log('Quizzes loaded:', quizzesData?.length || 0);
-          setQuizzes(quizzesData || []);
-        }
+            if (quizzesError) {
+              console.error('Error fetching quizzes:', quizzesError);
+              setQuizzes([]);
+            } else {
+              console.log('Quizzes loaded:', quizzesData?.length || 0);
+              setQuizzes(quizzesData || []);
+            }
 
         // Fetch courses
         const { data: coursesData, error: coursesError } = await supabase
@@ -206,23 +206,23 @@ export default function CreatorDashboard() {
               <div className="flex items-center space-x-4">
                 <div className="h-20 w-20 rounded-full overflow-hidden bg-gradient-to-r from-purple-500 to-indigo-600 p-0.5">
                   <div className="h-full w-full rounded-full overflow-hidden bg-white">
-                    {creatorProfile?.profile_image ? (
-                      <img 
-                        src={creatorProfile.profile_image} 
-                        alt={creatorProfile.full_name || 'Creator'} 
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
+                {creatorProfile?.profile_image ? (
+                  <img 
+                    src={creatorProfile.profile_image} 
+                    alt={creatorProfile.full_name || 'Creator'} 
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
                       <div className="flex items-center justify-center h-full w-full bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 text-2xl font-bold">
-                        {(creatorProfile?.full_name || creatorProfile?.email || 'C').charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    {(creatorProfile?.full_name || creatorProfile?.email || 'C').charAt(0).toUpperCase()}
                   </div>
-                </div>
-                <div>
+                )}
+              </div>
+            </div>
+              <div>
                   <h1 className="text-3xl font-bold text-gray-900">
                     Welcome back, {creatorProfile?.full_name || 'Creator'}! 👋
-                  </h1>
+                </h1>
                   <p className="text-gray-600 mt-1">
                     {creatorStats.totalQuizzes} quizzes and {creatorStats.totalCourses} courses created
                   </p>
@@ -244,13 +244,13 @@ export default function CreatorDashboard() {
                 </div>
               </div>
               <div className="flex space-x-3">
-                <Button
+                <Button 
                   onClick={() => router.push('/creator/quiz/create')}
                   className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
                 >
                   ➕ Create Quiz
                 </Button>
-                <Button
+                <Button 
                   onClick={() => router.push('/creator/course/create')}
                   className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
                 >
@@ -276,10 +276,10 @@ export default function CreatorDashboard() {
                 </div>
                 <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center text-2xl">
                   🧠
-                </div>
-              </div>
             </div>
-
+          </div>
+        </div>
+        
             {/* Course Stats */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
@@ -289,10 +289,10 @@ export default function CreatorDashboard() {
                 </div>
                 <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center text-2xl">
                   📚
-                </div>
+          </div>
               </div>
             </div>
-
+            
             {/* Engagement Stats */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
@@ -492,10 +492,10 @@ export default function CreatorDashboard() {
                     >
                       Create Your First Quiz
                     </Button>
-                  </div>
-                ) : (
+              </div>
+            ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {quizzes.map((quiz) => (
+                {quizzes.map((quiz) => (
                       <motion.div
                         key={quiz.id}
                         whileHover={{ y: -4 }}
@@ -508,10 +508,10 @@ export default function CreatorDashboard() {
                             quiz.is_published 
                               ? 'bg-green-100 text-green-800' 
                               : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {quiz.is_published ? 'Published' : 'Draft'}
-                          </span>
-                        </div>
+                        }`}>
+                          {quiz.is_published ? 'Published' : 'Draft'}
+                        </span>
+                      </div>
                         <h4 className="font-semibold text-gray-900 mb-2">{quiz.title}</h4>
                         <p className="text-sm text-gray-600 mb-4 line-clamp-2">
                           {quiz.description || 'No description available'}
@@ -531,12 +531,12 @@ export default function CreatorDashboard() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">All Courses</h3>
-                  <Button
+                          <Button
                     onClick={() => router.push('/creator/course/create')}
                     className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
-                  >
+                          >
                     ➕ Create New Course
-                  </Button>
+                          </Button>
                 </div>
                 
                 {courses.length === 0 ? (
@@ -544,12 +544,12 @@ export default function CreatorDashboard() {
                     <div className="text-6xl mb-4">📚</div>
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No courses yet</h3>
                     <p className="text-gray-500 mb-6">Create your first course to start teaching!</p>
-                    <Button
+                          <Button
                       onClick={() => router.push('/creator/course/create')}
                       className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
-                    >
+                          >
                       Create Your First Course
-                    </Button>
+                          </Button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -673,8 +673,8 @@ export default function CreatorDashboard() {
                               </svg>
                               View LinkedIn Profile
                             </a>
-                          </div>
-                        )}
+          </div>
+        )}
                       </div>
                     </div>
                     
@@ -712,10 +712,10 @@ export default function CreatorDashboard() {
                         Edit Profile
                       </Button>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+          </div>
+        )}
+          </div>
+        )}
           </motion.div>
         </div>
       </div>

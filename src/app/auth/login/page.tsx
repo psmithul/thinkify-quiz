@@ -1,38 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/authContext';
 import { formatErrorMessage } from '@/utils/errorHandler';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, isAdmin } = useAuth();
+  const { signIn, user, userData, isAdmin, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Redirect authenticated users away from login page
+  useEffect(() => {
+    if (!isLoading && user && userData) {
+      console.log('User is already authenticated, redirecting based on role:', userData.role);
+      
+      if (userData.role === 'admin') {
+        router.push('/admin/dashboard');
+      } else if (userData.role === 'creator') {
+        router.push('/creator/dashboard');
+      } else {
+        router.push('/user/dashboard');
+      }
+    }
+  }, [user, userData, isAdmin, isLoading, router]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setIsLoading(true);
+    setIsLoginLoading(true);
     setError(null);
 
     try {
       await signIn(email, password);
-      
-      // Redirect based on role (handled in useEffect in AuthProvider)
-      setTimeout(() => {
-        router.push(isAdmin ? '/admin/dashboard' : '/user/dashboard');
-      }, 500);
+      // Don't manually redirect here - let the useEffect handle it
     } catch (err) {
       setError(formatErrorMessage(err));
     } finally {
-      setIsLoading(false);
+      setIsLoginLoading(false);
     }
   }
 
@@ -41,47 +53,25 @@ export default function LoginPage() {
     setError(null);
     
     try {
-      // LinkedIn OAuth implementation
-      const clientId = process.env.NEXT_PUBLIC_LINKEDIN_CLIENT_ID;
-      
-      if (!clientId || clientId === 'your_linkedin_client_id_here') {
-        throw new Error('LinkedIn OAuth is not configured. Please contact the administrator.');
-      }
-      
-      // Dynamically determine the redirect URI based on environment
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                     (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
-      const redirectUri = `${baseUrl}/auth/linkedin/callback`;
-      
-      // Use OpenID Connect scopes as per Microsoft documentation
-      // https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2
-      const scope = 'openid profile email';
-      const state = Math.random().toString(36).substring(2, 15);
-      
-      // Store state in sessionStorage for verification
-      sessionStorage.setItem('linkedin_oauth_state', state);
-      
-      // Log for debugging
-      console.log('LinkedIn OAuth starting with:', {
-        clientId: clientId.substring(0, 10) + '...',
-        redirectUri,
-        scope,
-        state: state.substring(0, 5) + '...',
-        baseUrl
+      // Use Supabase's built-in LinkedIn OIDC provider
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: `${window.location.origin}/auth/linkedin/callback`,
+          scopes: 'openid profile email'
+        }
       });
+
+      if (error) {
+        console.error('LinkedIn OAuth error:', error);
+        throw error;
+      }
+
+      console.log('LinkedIn OAuth initiated successfully');
+      // The redirect will happen automatically via Supabase
       
-      const linkedInAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?` +
-        `response_type=code&` +
-        `client_id=${clientId}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `scope=${encodeURIComponent(scope)}&` +
-        `state=${state}`;
-      
-      console.log('Redirecting to LinkedIn OAuth URL...');
-      
-      // Redirect to LinkedIn OAuth
-      window.location.href = linkedInAuthUrl;
     } catch (err) {
+      console.error('LinkedIn login failed:', err);
       setError(err instanceof Error ? err.message : 'LinkedIn login failed. Please try again.');
       setIsLinkedInLoading(false);
     }
@@ -89,9 +79,35 @@ export default function LoginPage() {
 
   // Check if LinkedIn OAuth is configured
   const isLinkedInConfigured = () => {
-    const clientId = process.env.NEXT_PUBLIC_LINKEDIN_CLIENT_ID;
-    return clientId && clientId !== 'your_linkedin_client_id_here';
+    // With Supabase LinkedIn OIDC provider, we don't need environment variable checks
+    // Configuration is handled in Supabase dashboard
+    return true;
   };
+
+  // Show loading while checking authentication state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 p-8">
+          <div className="text-center">
+            <div className="inline-flex items-center gap-3 mb-4">
+              <div className="text-4xl">🧠</div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                Thinkify
+              </h1>
+            </div>
+            <div className="flex justify-center">
+              <div className="relative">
+                <div className="w-8 h-8 border-4 border-purple-200 rounded-full animate-spin"></div>
+                <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+              </div>
+            </div>
+            <p className="text-gray-600 mt-4">Checking authentication...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -151,11 +167,11 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 fullWidth
-                isLoading={isLoading}
+                isLoading={isLoginLoading}
                 variant="primary"
                 size="lg"
               >
-                {isLoading ? 'Signing in...' : 'Sign in'}
+                {isLoginLoading ? 'Signing in...' : 'Sign in'}
               </Button>
 
               {isLinkedInConfigured() && (

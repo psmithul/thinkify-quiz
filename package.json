@@ -2,38 +2,53 @@
   "name": "thinkify-quiz",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "description": "A modern, interactive quiz platform built with Next.js 15, TypeScript, and Supabase",
+  "homepage": "https://thinkify-quiz.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/thinkify-quiz.git"
+  },
+  "keywords": [
+    "quiz",
+    "education",
+    "learning",
+    "nextjs",
+    "supabase",
+    "typescript"
+  ],
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 3001",
     "lint": "next lint",
-    "init-db": "node scripts/init-db.js",
-    "create-dummy-data": "node scripts/create-dummy-quizzes.js",
-    "setup-follows": "node scripts/setup-follows-table.js"
+    "clean": "rm -rf .next tsconfig.tsbuildinfo dist",
+    "clean:all": "rm -rf .next tsconfig.tsbuildinfo dist node_modules package-lock.json",
+    "reinstall": "npm run clean:all && npm install",
+    "type-check": "tsc --noEmit",
+    "production:build": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4",
-    "@types/html2canvas": "^1.0.0",
-    "dotenv": "^16.5.0",
-    "framer-motion": "^11.18.2",
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.39.0",
+    "framer-motion": "^10.16.16",
+    "lucide-react": "^0.263.1",
     "next": "15.0.2",
-    "next-auth": "^4.24.7",
-    "node-fetch": "^3.3.2",
-    "react": "^18",
-    "react-dom": "^18"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4.1.7",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
     "autoprefixer": "^10.4.21",
-    "eslint": "^8",
+    "eslint": "^8.56.0",
     "eslint-config-next": "15.0.2",
-    "postcss": "^8.5.3",
-    "tailwindcss": "^4.1.7",
-    "typescript": "^5"
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }

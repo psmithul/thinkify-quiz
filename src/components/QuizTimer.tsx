@@ -22,9 +22,12 @@ export function QuizTimer({ timeLimitMinutes, onTimeUp, isActive, className = ''
   }, []);
 
   useEffect(() => {
-    if (!isActive || timeLeftSeconds <= 0) {
+    if (!isActive) {
       return;
     }
+
+    // Reset timer when component becomes active or timeLimitMinutes changes
+    setTimeLeftSeconds(timeLimitMinutes * 60);
 
     const interval = setInterval(() => {
       setTimeLeftSeconds(prev => {
@@ -49,7 +52,7 @@ export function QuizTimer({ timeLimitMinutes, onTimeUp, isActive, className = ''
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isActive, timeLeftSeconds, timeLimitMinutes, onTimeUp]);
+  }, [isActive, timeLimitMinutes, onTimeUp]);
 
   if (!isActive) {
     return null;
