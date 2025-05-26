@@ -37,11 +37,12 @@ type AttemptWithUser = QuizAttempt & {
 
 export function QuizStats({ quizId }: { quizId: string }) {
   const router = useRouter();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isAdmin, isLoading: authLoading } = useAuth();
   const [quiz, setQuiz] = useState<QuizWithStats | null>(null);
   const [attempts, setAttempts] = useState<AttemptWithUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [quizCreator, setQuizCreator] = useState<{ full_name?: string; email: string } | null>(null);
    
   useEffect(() => {
     if (!authLoading && !user) {
@@ -71,20 +72,33 @@ export function QuizStats({ quizId }: { quizId: string }) {
         
         console.log('Quiz data:', quizData);
         console.log('Current user:', user);
-        console.log('Creator check:', quizData.creator_id, user.id, quizData.creator_id === user.id);
+        console.log('Creator check:', quizData.creator_id, user.id, quizData.creator_id === user?.id);
         
-        // Check if quiz belongs to current creator
-        /*
-        if (quizData.creator_id !== user.id && user.role !== 'admin') {
+        // Check if quiz belongs to current creator or user is admin
+        if (quizData.creator_id !== user?.id && !isAdmin) {
           console.error('User does not have permission to view this quiz', {
             quizCreatorId: quizData.creator_id,
             userId: user.id,
-            userRole: user.role
+            userRole: user.role,
+            isAdmin: isAdmin
           });
-          router.push('/creator/dashboard');
+          router.push(isAdmin ? '/admin/dashboard' : '/creator/dashboard');
           return;
         }
-        */
+
+        // If admin viewing someone else's quiz, fetch creator info
+        if (isAdmin && quizData.creator_id !== user?.id) {
+          const { data: creatorData, error: creatorError } = await supabase
+            .from('users')
+            .select('full_name, email')
+            .eq('id', quizData.creator_id)
+            .single();
+          
+          if (!creatorError && creatorData) {
+            setQuizCreator(creatorData);
+          }
+        }
+    
         console.log('Starting attempts query for quiz:', quizId);
         
         // First try to get just the attempts without joins to debug if that works
@@ -179,7 +193,7 @@ export function QuizStats({ quizId }: { quizId: string }) {
     if (user && quizId) {
       fetchQuizStats();
     }
-  }, [user, quizId, router]);
+  }, [user, quizId, router, isAdmin]);
 
   if (authLoading || isLoading) {
     return (
@@ -203,20 +217,41 @@ export function QuizStats({ quizId }: { quizId: string }) {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Quiz Statistics</h1>
           <div className="flex space-x-4">
+            {(quiz?.creator_id === user?.id || isAdmin) && (
+              <Button 
+                variant="outline" 
+                onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
+              >
+                Edit Quiz
+              </Button>
+            )}
             <Button 
               variant="outline" 
-              onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
-            >
-              Edit Quiz
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => router.push('/creator/dashboard')}
+              onClick={() => router.push(isAdmin ? '/admin/dashboard' : '/creator/dashboard')}
             >
               Back to Dashboard
             </Button>
           </div>
         </div>
+        
+        {/* Admin viewing someone else's quiz notification */}
+        {isAdmin && quiz?.creator_id !== user?.id && (
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Admin View:</strong> You are viewing analytics for a quiz created by{' '}
+                  {quizCreator ? quizCreator.full_name || quizCreator.email : 'another user'}.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         
         {error && (
           <div className="bg-red-50 p-4 rounded-md">

@@ -20,7 +20,7 @@ const QUIZ_MAPPINGS = {
 };
 
 // URL for the quiz app
-const QUIZ_APP_BASE_URL = "http://localhost:3000";
+const QUIZ_APP_BASE_URL = "https://thinkify-quiz.vercel.app/";
 
 // Helper function to detect job skills from the page
 function detectJobSkills() {

@@ -36,26 +36,27 @@ type QuizClientProps = {
 
 export default function QuizClient({ quizId }: QuizClientProps) {
   const router = useRouter();
-  const { user, isCreator, isLoading: authLoading } = useAuth();
+  const { user, isCreator, isAdmin, isLoading: authLoading } = useAuth();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [quizCreator, setQuizCreator] = useState<{ full_name?: string; email: string } | null>(null);
 
   useEffect(() => {
     if (!authLoading) {
       if (!user) {
         router.push('/auth/login');
-      } else if (!isCreator) {
+      } else if (!isCreator && !isAdmin) {
         router.push('/user/dashboard');
       }
     }
-  }, [authLoading, user, isCreator, router]);
+  }, [authLoading, user, isCreator, isAdmin, router]);
 
   useEffect(() => {
     async function fetchQuizData() {
-      if (!user || !isCreator) return;
+      if (!user || (!isCreator && !isAdmin)) return;
       
       try {
         // Fetch quiz details
@@ -68,11 +69,25 @@ export default function QuizClient({ quizId }: QuizClientProps) {
         if (quizError) throw quizError;
         setQuiz(quizData);
 
-        // Make sure this creator owns the quiz
-        if (quizData.creator_id !== user.id) {
+        // Check if this user can view the quiz
+        // Creators can only view their own quizzes, but admins can view any quiz
+        if (!isAdmin && quizData.creator_id !== user?.id) {
           setError("You don't have permission to view this quiz");
           setIsLoading(false);
           return;
+        }
+
+        // If admin viewing someone else's quiz, fetch creator info
+        if (isAdmin && quizData.creator_id !== user?.id) {
+          const { data: creatorData, error: creatorError } = await supabase
+            .from('users')
+            .select('full_name, email')
+            .eq('id', quizData.creator_id)
+            .single();
+          
+          if (!creatorError && creatorData) {
+            setQuizCreator(creatorData);
+          }
         }
 
         // Fetch questions
@@ -100,10 +115,10 @@ export default function QuizClient({ quizId }: QuizClientProps) {
       }
     }
 
-    if (user && isCreator) {
+    if (user && (isCreator || isAdmin)) {
       fetchQuizData();
     }
-  }, [user, isCreator, quizId]);
+  }, [user, isCreator, isAdmin, quizId]);
 
   if (authLoading || isLoading) {
     return (
@@ -124,7 +139,7 @@ export default function QuizClient({ quizId }: QuizClientProps) {
             <h1 className="text-3xl font-bold text-gray-900">Quiz Details</h1>
             <Button 
               variant="outline" 
-              onClick={() => router.push('/creator/dashboard')}
+              onClick={() => router.push(isAdmin ? '/admin/dashboard' : '/creator/dashboard')}
             >
               Back to Dashboard
             </Button>
@@ -151,17 +166,38 @@ export default function QuizClient({ quizId }: QuizClientProps) {
           <div className="flex space-x-4">
             <Button 
               variant="outline" 
-              onClick={() => router.push('/creator/dashboard')}
+              onClick={() => router.push(isAdmin ? '/admin/dashboard' : '/creator/dashboard')}
             >
               Back to Dashboard
             </Button>
-            <Button 
-              onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
-            >
-              Edit Quiz
-            </Button>
+            {(quiz.creator_id === user?.id || isAdmin) && (
+              <Button 
+                onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
+              >
+                Edit Quiz
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Admin viewing someone else's quiz notification */}
+        {isAdmin && quiz.creator_id !== user?.id && (
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Admin View:</strong> You are viewing a quiz created by{' '}
+                  {quizCreator ? quizCreator.full_name || quizCreator.email : 'another user'}.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Quiz Overview */}
         <motion.div 
@@ -214,13 +250,15 @@ export default function QuizClient({ quizId }: QuizClientProps) {
           {questions.length === 0 ? (
             <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
               <p className="text-yellow-700">No questions have been added to this quiz yet.</p>
-              <Button 
-                onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
-                className="mt-4"
-                size="sm"
-              >
-                Add Questions
-              </Button>
+              {(quiz.creator_id === user?.id || isAdmin) && (
+                <Button 
+                  onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
+                  className="mt-4"
+                  size="sm"
+                >
+                  Add Questions
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -277,22 +315,24 @@ export default function QuizClient({ quizId }: QuizClientProps) {
         </div>
         
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-          <Button 
-            onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
-            fullWidth
-          >
-            Edit Quiz
-          </Button>
-          
-          <Button 
-            onClick={() => router.push(`/creator/quiz/${quizId}/stats`)}
-            variant="outline"
-            fullWidth
-          >
-            View Analytics
-          </Button>
-        </div>
+        {(quiz.creator_id === user?.id || isAdmin) && (
+          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+            <Button 
+              onClick={() => router.push(`/creator/quiz/${quizId}/edit`)}
+              fullWidth
+            >
+              Edit Quiz
+            </Button>
+            
+            <Button 
+              onClick={() => router.push(`/creator/quiz/${quizId}/stats`)}
+              variant="outline"
+              fullWidth
+            >
+              View Analytics
+            </Button>
+          </div>
+        )}
       </motion.div>
     </Layout>
   );

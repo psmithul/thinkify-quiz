@@ -100,10 +100,6 @@ export default function ResultsClient({
   const highestScore = attempts.length > 0
     ? Math.max(...attempts.map(attempt => attempt.score))
     : 0;
-    
-  const lowestScore = attempts.length > 0
-    ? Math.min(...attempts.map(attempt => attempt.score))
-    : 0;
 
   const passRate = attempts.length > 0
     ? (attempts.filter(attempt => attempt.score >= 70).length / attempts.length) * 100

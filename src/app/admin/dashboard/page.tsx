@@ -174,7 +174,7 @@ export default function AdminDashboard() {
       delete newAssignmentCounts[quizToDelete.id];
       setAssignmentCounts(newAssignmentCounts);
       
-      setSuccess(`Quiz "${quizToDelete.title}" deleted successfully.`);
+      setSuccess(`Quiz &quot;${quizToDelete.title}&quot; deleted successfully.`);
       setQuizToDelete(null);
     } catch (err) {
       setError(formatErrorMessage(err));
@@ -352,7 +352,7 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
               <h3 className="text-xl font-bold text-gray-900 mb-4">Delete Quiz</h3>
               <p className="mb-6">
-                Are you sure you want to delete the quiz "<span className="font-medium">{quizToDelete.title}</span>"? 
+                Are you sure you want to delete the quiz &quot;<span className="font-medium">{quizToDelete.title}</span>&quot;? 
                 This will also delete all questions, assignments, and results associated with this quiz.
                 This action cannot be undone.
               </p>

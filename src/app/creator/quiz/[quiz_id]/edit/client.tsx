@@ -35,7 +35,7 @@ type QuizWithQuestions = Quiz & {
 
 export function QuizEditor({ quizId }: { quizId: string }) {
   const router = useRouter();
-  const { user, userData, isCreator, isAdmin, isLoading: authLoading } = useAuth();
+  const { user, isCreator, isAdmin, isLoading: authLoading } = useAuth();
   const [quiz, setQuiz] = useState<QuizWithQuestions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,9 +96,9 @@ export function QuizEditor({ quizId }: { quizId: string }) {
         console.log('Quiz data loaded:', quizData);
         
         // Check if quiz belongs to current creator
-        if (quizData.creator_id !== user.id && !isAdmin) {
+        if (quizData.creator_id !== user?.id && !isAdmin) {
           console.log('Quiz does not belong to current user');
-          router.push('/creator/dashboard');
+          router.push(isAdmin ? '/admin/dashboard' : '/creator/dashboard');
           return;
         }
         
@@ -434,7 +434,7 @@ export function QuizEditor({ quizId }: { quizId: string }) {
         <div className="max-w-4xl mx-auto p-6 bg-red-50 rounded-lg border border-red-200">
           <h1 className="text-2xl font-bold text-red-700 mb-4">Access Denied</h1>
           <p className="text-red-600 mb-4">
-            You don't have permission to edit quizzes. You need to have a creator account.
+            You don&apos;t have permission to edit quizzes. You need to have a creator account.
           </p>
           <div className="flex gap-4">
             <Button
@@ -669,7 +669,7 @@ export function QuizEditor({ quizId }: { quizId: string }) {
           
           {questions.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-500">No questions added yet. Click "Add Question" to get started.</p>
+              <p className="text-gray-500">No questions added yet. Click &quot;Add Question&quot; to get started.</p>
             </div>
           ) : (
             <div className="space-y-4">
