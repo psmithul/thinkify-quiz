@@ -4,7 +4,15 @@ export async function POST(request: NextRequest) {
   try {
     const { code, redirectUri } = await request.json();
     
+    console.log('LinkedIn userinfo API called with:', {
+      codeLength: code?.length,
+      codePreview: code?.substring(0, 15) + '...',
+      redirectUri,
+      timestamp: new Date().toISOString()
+    });
+    
     if (!code) {
+      console.error('No authorization code provided');
       return NextResponse.json(
         { error: 'Authorization code is required' },
         { status: 400 }
@@ -14,6 +22,12 @@ export async function POST(request: NextRequest) {
     // Use the correct environment variable names that match what's in the login page
     const clientId = process.env.NEXT_PUBLIC_LINKEDIN_CLIENT_ID;
     const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+    
+    console.log('Environment check:', {
+      clientId: clientId ? clientId.substring(0, 10) + '...' : 'MISSING',
+      clientSecret: clientSecret ? clientSecret.substring(0, 10) + '...' : 'MISSING',
+      nodeEnv: process.env.NODE_ENV
+    });
     
     // Use the redirect URI that was passed from the client
     // This MUST match exactly what was used in the initial OAuth request
@@ -57,24 +71,43 @@ export async function POST(request: NextRequest) {
       client_secret: '[HIDDEN]'
     });
     
+    // Add detailed request logging
+    const requestStart = Date.now();
+    console.log('Making token request to LinkedIn...');
+    
     const tokenResponse = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
+        'User-Agent': 'Thinkify-Quiz-App/1.0'
       },
       body: tokenParams,
     });
     
+    const requestDuration = Date.now() - requestStart;
     const tokenResponseText = await tokenResponse.text();
-    console.log('Token response status:', tokenResponse.status);
-    console.log('Token response headers:', Object.fromEntries(tokenResponse.headers.entries()));
+    
+    console.log('Token response received:', {
+      status: tokenResponse.status,
+      statusText: tokenResponse.statusText,
+      duration: `${requestDuration}ms`,
+      headers: Object.fromEntries(tokenResponse.headers.entries()),
+      bodyLength: tokenResponseText.length,
+      bodyPreview: tokenResponseText.substring(0, 200)
+    });
     
     if (!tokenResponse.ok) {
       console.error('LinkedIn token exchange failed:', {
         status: tokenResponse.status,
         statusText: tokenResponse.statusText,
-        response: tokenResponseText
+        response: tokenResponseText,
+        requestParams: {
+          grant_type: 'authorization_code',
+          redirect_uri: actualRedirectUri,
+          client_id: clientId.substring(0, 10) + '...',
+          code_length: code.length
+        }
       });
       
       // Try to parse error details
@@ -82,12 +115,32 @@ export async function POST(request: NextRequest) {
       try {
         const errorData = JSON.parse(tokenResponseText);
         errorDetails = errorData.error_description || errorData.error || tokenResponseText;
+        console.error('Parsed LinkedIn error:', errorData);
+        
+        // Common LinkedIn OAuth errors and their meanings
+        if (errorData.error === 'invalid_grant') {
+          errorDetails = 'Authorization code expired or already used. Please try logging in again.';
+        } else if (errorData.error === 'invalid_client') {
+          errorDetails = 'Client ID or secret is incorrect.';
+        } else if (errorData.error === 'invalid_request') {
+          errorDetails = 'Request format is invalid. This might be a redirect URI mismatch.';
+        }
       } catch (e) {
         // Use raw response if not JSON
+        console.error('Could not parse LinkedIn error response as JSON');
       }
       
       return NextResponse.json(
-        { error: 'Failed to exchange code for token', details: errorDetails },
+        { 
+          error: 'Failed to exchange code for token', 
+          details: errorDetails,
+          status: tokenResponse.status,
+          debug: {
+            codeLength: code.length,
+            redirectUri: actualRedirectUri,
+            clientIdPrefix: clientId.substring(0, 5)
+          }
+        },
         { status: 400 }
       );
     }
@@ -123,16 +176,26 @@ export async function POST(request: NextRequest) {
     console.log('Successfully got access token, fetching profile...');
     
     // Step 2: Get user profile information using the userinfo endpoint (OpenID Connect)
+    const profileStart = Date.now();
     const profileResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json',
+        'User-Agent': 'Thinkify-Quiz-App/1.0'
       },
     });
     
+    const profileDuration = Date.now() - profileStart;
     const profileResponseText = await profileResponse.text();
-    console.log('Profile response status:', profileResponse.status);
-    console.log('Profile response headers:', Object.fromEntries(profileResponse.headers.entries()));
+    
+    console.log('Profile response received:', {
+      status: profileResponse.status,
+      statusText: profileResponse.statusText,
+      duration: `${profileDuration}ms`,
+      headers: Object.fromEntries(profileResponse.headers.entries()),
+      bodyLength: profileResponseText.length,
+      bodyPreview: profileResponseText.substring(0, 200)
+    });
     
     if (!profileResponse.ok) {
       console.error('LinkedIn userinfo endpoint failed:', {
@@ -146,12 +209,18 @@ export async function POST(request: NextRequest) {
       try {
         const errorData = JSON.parse(profileResponseText);
         errorDetails = errorData.message || errorData.error || profileResponseText;
+        console.error('Parsed profile error:', errorData);
       } catch (e) {
         // Use raw response if not JSON
+        console.error('Could not parse profile error response as JSON');
       }
       
       return NextResponse.json(
-        { error: 'Failed to fetch LinkedIn profile', details: errorDetails },
+        { 
+          error: 'Failed to fetch LinkedIn profile', 
+          details: errorDetails,
+          status: profileResponse.status 
+        },
         { status: 400 }
       );
     }
@@ -196,7 +265,7 @@ export async function POST(request: NextRequest) {
     console.log('Successfully fetched LinkedIn profile via OpenID Connect');
     
     // Return the user data in the expected format
-    return NextResponse.json({
+    const userData = {
       id: profile.sub,
       email: profile.email,
       fullName: profile.name || `${profile.given_name || ''} ${profile.family_name || ''}`.trim(),
@@ -209,12 +278,35 @@ export async function POST(request: NextRequest) {
       given_name: profile.given_name,
       family_name: profile.family_name,
       picture: profile.picture
+    };
+    
+    console.log('Returning user data:', {
+      id: userData.id,
+      email: userData.email,
+      fullName: userData.fullName,
+      hasImage: !!userData.profileImage
     });
+    
+    return NextResponse.json(userData);
     
   } catch (error) {
     console.error('LinkedIn userinfo API error:', error);
+    
+    // Detailed error logging
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
+    
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Internal server error', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
