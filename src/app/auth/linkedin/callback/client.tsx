@@ -5,13 +5,21 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 
+interface DebugInfo {
+  code?: string;
+  state?: string;
+  error?: string;
+  clientId?: string;
+  timestamp?: string;
+}
+
 export default function LinkedInCallbackClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Processing LinkedIn login...');
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
 
   useEffect(() => {
     async function handleLinkedInCallback() {
@@ -34,9 +42,9 @@ export default function LinkedInCallbackClient() {
         });
 
         setDebugInfo({
-          code: code ? code.substring(0, 10) + '...' : null,
-          state: state ? state.substring(0, 5) + '...' : null,
-          error,
+          code: code ? code.substring(0, 10) + '...' : undefined,
+          state: state ? state.substring(0, 5) + '...' : undefined,
+          error: error || undefined,
           clientId: clientId.substring(0, 10) + '...'
         });
         
@@ -223,7 +231,7 @@ export default function LinkedInCallbackClient() {
         setMessage(errorMessage);
         
         // Also log debug info for troubleshooting
-        setDebugInfo(prev => ({
+        setDebugInfo((prev: DebugInfo | null) => ({
           ...prev,
           error: errorMessage,
           timestamp: new Date().toISOString()
