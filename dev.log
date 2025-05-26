@@ -1,0 +1,81 @@
+
+> thinkify-quiz@0.1.0 dev
+> next dev -p 3001
+
+   ▲ Next.js 15.0.2
+   - Local:        http://localhost:3001
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in[?25h
+
+ ○ Compiling / ...
+ ✓ Compiled / in 1785ms (1514 modules)
+ GET / 200 in 2024ms
+ �[?25h
+ling /auth/login ...
+ ✓ Compiled /auth/login in 552ms (1525 modules)
+ GET /auth/login 200 in 605ms
+ GET /auth/login 200 in 10ms
+ ✓ Compiled /auth/linkedin/callback in 321ms (1518 modules)
+ GET /auth/linkedin/callback?code=AQTcT51aTPNc5Uwq26Iib4zTWv2ai6341fGhlqwiXJsHsXEVM41iYck5nmSgLc5PReTYK00i3YFCmym8cuSsZUW4vcEpSJSsHRqiqEldnGBKB-hAAnE3yQcW_FPUqUYg2-5GaXayGFt0HZtB5ygRkGyVuG52sBnNsgEomcVGnem03LccxkMZE20yG6_KEcXVxWCmFSp5QFNjlJ9SY7Q&state=orre3gqokf 200 in 407ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled /api/auth/linkedin/userinfo in 164ms (1536 modules)
+LinkedIn token exchange failed: {"error":"invalid_request","error_description":"Unable to retrieve access token: appid/redirect uri/code verifier does not match authorization code. Or authorization code expired. Or external member binding exists"}
+ POST /api/auth/linkedin/userinfo 400 in 704ms
+LinkedIn profile fetch failed: {"status":401,"serviceErrorCode":65601,"code":"REVOKED_ACCESS_TOKEN","message":"The token used in the request has been revoked by the user"}
+ POST /api/auth/linkedin/userinfo 400 in 1575ms
+ GET /auth/login 200 in 35ms
+ GET /auth/login 200 in 19ms
+ ✓ Compiled /_not-found in 154ms (1539 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 234ms
+ ✓ Compiled /user/dashboard in 450ms (1548 modules)
+ GET /user/dashboard 200 in 494ms
+ ✓ Compiled /creator/dashboard in 259ms (1555 modules)
+ GET /creator/dashboard 200 in 303ms
+ ✓ Compiled /creator/course/create in 352ms (1562 modules)
+ GET /creator/course/create 200 in 386ms
+ ✓ Compiled /creator/profile in 418ms (1569 modules)
+ GET /creator/profile 200 in 447ms
+ GET /creator/dashboard 200 in 33ms
+ ✓ Compiled /creator/quiz/create in 319ms (1554 modules)
+ GET /creator/quiz/create 200 in 404ms
+ ✓ Compiled /creator/quiz/new in 348ms (1561 modules)
+ GET /creator/quiz/new 200 in 382ms
+ GET /creator/quiz/new 200 in 7ms
+ ✓ Compiled / in 148ms (824 modules)
+ GET / 200 in 199ms
+ GET /creator/dashboard 200 in 74ms
+ GET /creator/dashboard 200 in 7ms
+ ✓ Compiled /auth/login in 171ms (830 modules)
+ GET /auth/login 200 in 206ms
+ GET / 200 in 104ms
+ ✓ Compiled /_not-found in 188ms (1566 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 254ms
+ ✓ Compiled /browse in 347ms (1573 modules)
+ GET /browse 200 in 375ms
+ ✓ Compiled in 414ms (749 modules)
+ GET /browse 200 in 17ms
+ ✓ Compiled in 573ms (1557 modules)
+ GET /browse 200 in 47ms
+ ✓ Compiled in 1135ms (1557 modules)
+ GET /browse 200 in 43ms
+ ✓ Compiled in 483ms (1557 modules)
+ GET /browse 200 in 31ms
+ ✓ Compiled in 503ms (1557 modules)
+ GET /browse 200 in 36ms
+ ✓ Compiled in 461ms (1557 modules)
+ GET /browse 200 in 20ms
+ ✓ Compiled in 387ms (1557 modules)
+ GET /browse 200 in 19ms
+ ✓ Compiled in 556ms (1557 modules)
+ GET /browse 200 in 20ms
+ ✓ Compiled in 346ms (749 modules)
+ GET /browse 200 in 9ms
+ ✓ Compiled in 292ms (749 modules)
+ GET /browse 200 in 13ms
+ ✓ Compiled in 396ms (749 modules)
+ GET /browse 200 in 11ms
+ ✓ Compiled in 257ms (749 modules)
+ GET /browse 200 in 15ms
+[?25h

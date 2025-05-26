@@ -11,7 +11,7 @@ async function loadSettings() {
   try {
     const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
     
-    const enableToggle = document.getElementById('enableToggle');
+  const enableToggle = document.getElementById('enableToggle');
     const relevanceToggle = document.getElementById('relevanceToggle');
     
     // Set toggle states

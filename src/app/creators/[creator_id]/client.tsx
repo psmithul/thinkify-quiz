@@ -353,16 +353,11 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
                   <h3 className="text-lg font-medium text-gray-900 mb-2">{quiz.title}</h3>
                   <p className="text-gray-600 mb-4 line-clamp-3">{quiz.description}</p>
                   
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm font-medium text-gray-500">
-                      {quiz.price ? `$${quiz.price.toFixed(2)}` : 'Free'}
-                    </div>
-                    <Button 
-                      onClick={() => router.push(`/user/quiz/${quiz.id}`)}
-                      size="sm"
-                    >
-                      Take Quiz
-                    </Button>
+                  <div className="flex justify-between items-center text-sm text-gray-500">
+                    <span>
+                      Interactive Quiz
+                    </span>
+                    <span className="text-blue-600 font-medium">Quiz</span>
                   </div>
                 </motion.div>
               ))}

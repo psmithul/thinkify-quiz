@@ -15,7 +15,6 @@ export default async function QuizResultsPage({ params }: { params: Params }) {
         <LoadingIndicator 
           size="lg" 
           message="Loading quiz results..."
-          color="purple"
         />
       </Layout>
     }>

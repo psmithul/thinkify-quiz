@@ -6,7 +6,7 @@ import { LoadingIndicator } from '@/components/LoadingIndicator';
 type Params = Promise<{ quiz_id: string }>;
 
 // Server Component
-export default async function QuizStatsPage({ params }: { params: Params }) {
+export default async function QuizStatsPage({ params }: { params: Promise<Params> }) {
   const { quiz_id } = await params;
   
   return (
@@ -15,7 +15,6 @@ export default async function QuizStatsPage({ params }: { params: Params }) {
         <LoadingIndicator
           size="lg"
           message="Loading quiz statistics..."
-          color="purple"
         />
       </Layout>
     }>

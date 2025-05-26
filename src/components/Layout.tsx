@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type LayoutProps = {
   children: ReactNode;
@@ -15,6 +16,7 @@ export function Layout({ children }: LayoutProps) {
   const pathname = usePathname();
   const [dbTablesExist, setDbTablesExist] = useState<boolean>(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     // Check if essential tables exist
@@ -42,182 +44,395 @@ export function Layout({ children }: LayoutProps) {
       if (!target.closest('.profile-dropdown')) {
         setDropdownOpen(false);
       }
+      if (!target.closest('.mobile-menu')) {
+        setMobileMenuOpen(false);
+      }
     }
     
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  const navigationLinks = [
+    {
+      href: '/browse',
+      label: 'Browse Content',
+      icon: '🔍',
+      active: pathname === '/browse',
+      className: 'text-blue-600 hover:bg-blue-50'
+    },
+    {
+      href: '/creators',
+      label: 'View Creators',
+      icon: '👨‍🏫',
+      active: pathname?.startsWith('/creators'),
+      className: 'text-purple-600 hover:bg-purple-50'
+    }
+  ];
+
+  const getUserLinks = () => {
+    if (isAdmin) {
+      return [
+        {
+          href: '/admin/dashboard',
+          label: 'Admin Dashboard',
+          icon: '⚙️',
+          active: pathname?.startsWith('/admin'),
+          badge: 'Admin',
+          badgeClass: 'badge-primary'
+        }
+      ];
+    } else if (isCreator) {
+      return [
+        {
+          href: '/creator/dashboard',
+          label: 'Creator Dashboard',
+          icon: '📊',
+          active: pathname?.startsWith('/creator') && !pathname?.startsWith('/creator/profile'),
+          badge: 'Creator',
+          badgeClass: 'badge-secondary'
+        },
+        {
+          href: '/creator/profile',
+          label: 'My Profile',
+          icon: '👤',
+          active: pathname?.startsWith('/creator/profile')
+        }
+      ];
+    } else {
+      return [
+        {
+          href: '/user/dashboard',
+          label: 'My Quizzes',
+          icon: '🧠',
+          active: pathname?.startsWith('/user') && !pathname?.startsWith('/user/profile')
+        },
+        {
+          href: '/user/profile',
+          label: 'My Profile',
+          icon: '👤',
+          active: pathname?.startsWith('/user/profile'),
+          badge: 'User',
+          badgeClass: 'badge-outline'
+        }
+      ];
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="bg-white shadow-sm">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-blue-50">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-lg shadow-modern border-b border-gray-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-6">
-              <Link href="/" className="flex-shrink-0 flex items-center">
-                <span className="text-purple-600 text-lg font-medium">Thinkify Quiz</span>
-              </Link>
-              
-              <Link href="/creators" className={`px-3 py-2 rounded-md text-sm ${
-                pathname?.startsWith('/creators') 
-                  ? 'bg-purple-100 text-purple-700' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}>
-                View Creators
-              </Link>
-            </div>
-            {user ? (
-              <div className="flex items-center gap-4">
-                {isAdmin ? (
-                  <>
-                    <Link href="/admin/dashboard" className={`px-3 py-2 rounded-md text-sm ${
-                      pathname?.startsWith('/admin') 
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                      Admin Dashboard
-                    </Link>
-                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-medium">
-                      Admin
-                    </span>
-                  </>
-                ) : isCreator ? (
-                  <>
-                    <Link href="/creator/dashboard" className={`px-3 py-2 rounded-md text-sm ${
-                      pathname?.startsWith('/creator') && !pathname?.startsWith('/creator/profile')
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                      Creator Dashboard
-                    </Link>
-                    <Link href="/creator/profile" className={`px-3 py-2 rounded-md text-sm ${
-                      pathname?.startsWith('/creator/profile') 
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                      My Creator Profile
-                    </Link>
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                      Creator
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Link href="/user/dashboard" className={`px-3 py-2 rounded-md text-sm ${
-                      pathname?.startsWith('/user') && !pathname?.startsWith('/user/profile')
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                      My Quizzes
-                    </Link>
-                    <Link href="/user/profile" className={`px-3 py-2 rounded-md text-sm ${
-                      pathname?.startsWith('/user/profile') 
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                      My Profile
-                    </Link>
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                      User
-                    </span>
-                  </>
-                )}
-                <div className="relative ml-3 profile-dropdown">
-                  <div 
-                    className="cursor-pointer flex items-center" 
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                  >
-                    {userData?.profile_image ? (
-                      <img
-                        className="h-8 w-8 rounded-full object-cover border-2 border-purple-200"
-                        src={userData.profile_image}
-                        alt={userData.full_name || 'User'}
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-semibold border-2 border-purple-200">
-                        {(userData?.full_name?.[0] || userData?.email?.[0] || '?').toUpperCase()}
-                      </div>
-                    )}
-                    <span className="ml-2 text-sm font-medium text-gray-700 hidden md:block">
-                      {userData?.full_name || userData?.email?.split('@')[0] || 'User'}
-                    </span>
-                  </div>
-                  
-                  {dropdownOpen && (
-                    <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                      <div className="px-4 py-2 text-sm text-gray-900 border-b border-gray-100">
-                        <p className="font-semibold truncate">{userData?.email}</p>
-                        <p className="text-xs text-gray-500 mt-1">{userData?.role}</p>
-                      </div>
-                      {isAdmin && (
-                        <a href="/admin/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                          Admin Dashboard
-                        </a>
-                      )}
-                      {isCreator && (
-                        <a href="/creator/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                          Edit Creator Profile
-                        </a>
-                      )}
-                      {!isAdmin && !isCreator && (
-                        <a href="/user/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                          Profile Settings
-                        </a>
-                      )}
-                      <a 
-                        href="/" 
-                        onClick={(e) => {e.preventDefault(); signOut();}} 
-                        className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+            {/* Logo */}
+            <Link href="/" className="flex-shrink-0 flex items-center group">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-3"
+              >
+                <div className="text-2xl">🧠</div>
+                <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  Thinkify
+                </span>
+              </motion.div>
+            </Link>
+            
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-2">
+              {navigationLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`nav-link ${link.active ? 'active' : ''} ${link.className || ''}`}
+                >
+                  <span className="mr-2">{link.icon}</span>
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+
+            {/* User Menu */}
+            <div className="flex items-center gap-4">
+              {user ? (
+                <>
+                  {/* Desktop User Links */}
+                  <div className="hidden md:flex items-center gap-2">
+                    {getUserLinks().map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={`nav-link ${link.active ? 'active' : ''} text-sm`}
                       >
-                        Sign Out
-                      </a>
-                    </div>
-                  )}
+                        <span className="mr-2">{link.icon}</span>
+                        {link.label}
+                        {link.badge && (
+                          <span className={`badge ${link.badgeClass} ml-2`}>
+                            {link.badge}
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+
+                  {/* Profile Dropdown */}
+                  <div className="relative profile-dropdown">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-all duration-200 focus-ring"
+                      aria-label="User menu"
+                    >
+                      {userData?.profile_image ? (
+                        <img
+                          className="h-10 w-10 rounded-full object-cover ring-2 ring-purple-200 shadow-sm"
+                          src={userData.profile_image}
+                          alt={userData.full_name || 'User'}
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold ring-2 ring-purple-200 shadow-sm">
+                          {(userData?.full_name?.[0] || userData?.email?.[0] || '?').toUpperCase()}
+                        </div>
+                      )}
+                      <div className="hidden sm:block text-left">
+                        <p className="text-sm font-semibold text-gray-900 line-clamp-1">
+                          {userData?.full_name || userData?.email?.split('@')[0] || 'User'}
+                        </p>
+                        <p className="text-xs text-gray-500 capitalize">{userData?.role}</p>
+                      </div>
+                      <motion.div
+                        animate={{ rotate: dropdownOpen ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="text-gray-400"
+                      >
+                        ▼
+                      </motion.div>
+                    </motion.button>
+                    
+                    <AnimatePresence>
+                      {dropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute right-0 mt-2 w-64 dropdown z-50"
+                        >
+                          <div className="p-4 border-b border-gray-100">
+                            <p className="font-semibold text-gray-900 line-clamp-1">{userData?.email}</p>
+                            <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                              <span className={`badge ${isAdmin ? 'badge-primary' : isCreator ? 'badge-secondary' : 'badge-outline'}`}>
+                                {userData?.role}
+                              </span>
+                            </p>
+                          </div>
+
+                          {/* Mobile menu items */}
+                          <div className="md:hidden py-2">
+                            {navigationLinks.map((link) => (
+                              <Link
+                                key={link.href}
+                                href={link.href}
+                                className="dropdown-item"
+                              >
+                                <span className="mr-3">{link.icon}</span>
+                                {link.label}
+                              </Link>
+                            ))}
+                          </div>
+
+                          <div className="py-2">
+                            {getUserLinks().map((link) => (
+                              <Link
+                                key={link.href}
+                                href={link.href}
+                                className="dropdown-item"
+                              >
+                                <span className="mr-3">{link.icon}</span>
+                                {link.label}
+                                {link.badge && (
+                                  <span className={`badge ${link.badgeClass} ml-auto`}>
+                                    {link.badge}
+                                  </span>
+                                )}
+                              </Link>
+                            ))}
+                            
+                            <div className="border-t border-gray-100 mt-2 pt-2">
+                              <button 
+                                onClick={(e) => {e.preventDefault(); signOut();}} 
+                                className="dropdown-item text-red-600 hover:bg-red-50 w-full"
+                              >
+                                <span className="mr-3">🚪</span>
+                                Sign Out
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Link 
+                    href="/auth/login" 
+                    className="nav-link text-gray-600 hover:text-gray-900"
+                  >
+                    Login
+                  </Link>
+                  <Link 
+                    href="/auth/creator-login" 
+                    className="nav-link text-purple-600 hover:bg-purple-50"
+                  >
+                    Creator Login
+                  </Link>
+                  <Link 
+                    href="/auth/signup" 
+                    className="btn btn-primary text-sm px-6 py-2"
+                  >
+                    Sign Up
+                  </Link>
                 </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <Link href="/auth/login" className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm">
-                  Login
-                </Link>
-                <Link href="/auth/creator-login" className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm">
-                  Creator Login
-                </Link>
-                <Link href="/auth/signup" className="bg-purple-600 text-white hover:bg-purple-700 px-3 py-2 rounded-md text-sm">
-                  Sign Up
-                </Link>
-              </div>
-            )}
+              )}
+
+              {/* Mobile menu button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg hover:bg-gray-100 focus-ring mobile-menu"
+                aria-label="Toggle mobile menu"
+              >
+                <div className="w-6 h-6 flex flex-col justify-center items-center">
+                  <span className={`block w-5 h-0.5 bg-gray-600 transition-all duration-200 ${mobileMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
+                  <span className={`block w-5 h-0.5 bg-gray-600 transition-all duration-200 mt-1 ${mobileMenuOpen ? 'opacity-0' : ''}`}></span>
+                  <span className={`block w-5 h-0.5 bg-gray-600 transition-all duration-200 mt-1 ${mobileMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="md:hidden border-t border-gray-200 bg-white/95 backdrop-blur-lg mobile-menu"
+            >
+              <div className="px-4 py-4 space-y-2">
+                {navigationLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`block nav-link ${link.active ? 'active' : ''} ${link.className || ''}`}
+                  >
+                    <span className="mr-3">{link.icon}</span>
+                    {link.label}
+                  </Link>
+                ))}
+                
+                {!user && (
+                  <div className="pt-4 border-t border-gray-200 space-y-2">
+                    <Link href="/auth/login" className="block nav-link">
+                      🔑 Login
+                    </Link>
+                    <Link href="/auth/signup" className="block btn btn-primary text-center">
+                      🚀 Sign Up
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
-      <main className="flex-1">
-        {!dbTablesExist && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 m-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-yellow-700">
-                  Database tables are not set up yet. Please run <code className="bg-yellow-100 px-1 py-0.5 rounded">npm run init-db</code> to initialize the database.
-                </p>
-              </div>
-            </div>
+
+      {/* Database Warning */}
+      {!dbTablesExist && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="status-warning mx-4 mt-4 flex items-start gap-3"
+        >
+          <div className="text-2xl">⚠️</div>
+          <div>
+            <p className="font-semibold">Database Setup Required</p>
+            <p className="text-sm mt-1">
+              Database tables are not set up yet. Please run the SQL setup script in your Supabase dashboard.
+            </p>
           </div>
-        )}
+        </motion.div>
+      )}
+
+      {/* Main Content */}
+      <main className="flex-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {children}
         </div>
       </main>
-      <footer className="bg-white border-t border-gray-200">
+
+      {/* Footer */}
+      <footer className="bg-white/80 backdrop-blur-lg border-t border-gray-200/50 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-6 md:flex md:items-center md:justify-between">
-            <div className="text-center md:text-left">
-              <p className="text-sm text-gray-500">
-                &copy; {new Date().getFullYear()} Thinkify Labs. All rights reserved.
+          <div className="py-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              <div className="col-span-1 md:col-span-2">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="text-2xl">🧠</div>
+                  <span className="text-xl font-bold text-gray-900">Thinkify</span>
+                </div>
+                <p className="text-gray-600 max-w-md">
+                  Empowering learning through interactive quizzes and comprehensive courses. 
+                  Join our community of learners and creators today.
+                </p>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-4">Learn</h4>
+                <ul className="space-y-3">
+                  <li>
+                    <Link href="/browse" className="text-gray-600 hover:text-purple-600 transition-colors">
+                      Browse Content
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/creators" className="text-gray-600 hover:text-purple-600 transition-colors">
+                      Find Creators
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-4">Create</h4>
+                <ul className="space-y-3">
+                  <li>
+                    <Link href="/make-me-creator" className="text-gray-600 hover:text-purple-600 transition-colors">
+                      Become a Creator
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/auth/creator-login" className="text-gray-600 hover:text-purple-600 transition-colors">
+                      Creator Login
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="border-t border-gray-200 mt-8 pt-6 text-center">
+              <p className="text-gray-500 text-sm">
+                &copy; {new Date().getFullYear()} Thinkify Quiz Platform. Built with ❤️ for learners everywhere.
               </p>
             </div>
           </div>

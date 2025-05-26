@@ -17,6 +17,9 @@ export type User = {
   location?: string | null;
   job_title?: string | null;
   skills?: string[] | null;
+  current_company?: string | null;
+  linkedin_url?: string | null;
+  previous_companies?: string[] | null;
   created_at?: string | null;
 };
 
@@ -29,6 +32,65 @@ export type Quiz = {
   price?: number;
   created_at: string;
   updated_at?: string;
+};
+
+// Course types - NEW COURSES SYSTEM
+export type Course = {
+  id: string;
+  title: string;
+  description?: string;
+  content?: string;
+  thumbnail_url?: string;
+  duration_minutes?: number;
+  level?: 'beginner' | 'intermediate' | 'advanced';
+  category?: string;
+  tags?: string[];
+  is_published?: boolean;
+  is_featured?: boolean;
+  price?: number;
+  creator_id?: string;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type CourseLesson = {
+  id: string;
+  course_id: string;
+  title: string;
+  content?: string;
+  video_url?: string;
+  duration_minutes?: number;
+  position: number;
+  is_free?: boolean;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type CourseEnrollment = {
+  id: string;
+  course_id: string;
+  user_id: string;
+  enrolled_at: string;
+  progress?: number;
+  completed_at?: string;
+};
+
+export type CourseLessonProgress = {
+  id: string;
+  enrollment_id: string;
+  lesson_id: string;
+  completed?: boolean;
+  completed_at?: string;
+  watch_time_minutes?: number;
+};
+
+// Extended Course type with related data
+export type CourseWithDetails = Course & {
+  lessons?: CourseLesson[];
+  enrollments?: CourseEnrollment[];
+  creator?: User;
+  enrollment_count?: number;
+  lesson_count?: number;
 };
 
 // Admin client with service role key that bypasses RLS

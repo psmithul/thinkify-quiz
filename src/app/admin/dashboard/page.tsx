@@ -174,7 +174,7 @@ export default function AdminDashboard() {
       delete newAssignmentCounts[quizToDelete.id];
       setAssignmentCounts(newAssignmentCounts);
       
-      setSuccess(`Quiz &quot;${quizToDelete.title}&quot; deleted successfully.`);
+      setSuccess(`Quiz "${quizToDelete.title}" deleted successfully.`);
       setQuizToDelete(null);
     } catch (err) {
       setError(formatErrorMessage(err));
@@ -193,7 +193,6 @@ export default function AdminDashboard() {
         <LoadingIndicator 
           size="lg" 
           message="Loading admin dashboard..."
-          color="purple"
         />
       </Layout>
     );
@@ -209,7 +208,15 @@ export default function AdminDashboard() {
       >
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <Button onClick={handleCreateQuiz}>Create New Quiz</Button>
+          <div className="flex space-x-3">
+            <Button 
+              variant="outline"
+              onClick={() => router.push('/admin/companies')}
+            >
+              Manage Companies
+            </Button>
+            <Button onClick={handleCreateQuiz}>Create New Quiz</Button>
+          </div>
         </div>
 
         <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
@@ -352,7 +359,7 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
               <h3 className="text-xl font-bold text-gray-900 mb-4">Delete Quiz</h3>
               <p className="mb-6">
-                Are you sure you want to delete the quiz &quot;<span className="font-medium">{quizToDelete.title}</span>&quot;? 
+                Are you sure you want to delete the quiz "<span className="font-medium">{quizToDelete.title}</span>"? 
                 This will also delete all questions, assignments, and results associated with this quiz.
                 This action cannot be undone.
               </p>

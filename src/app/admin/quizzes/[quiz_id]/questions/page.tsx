@@ -19,14 +19,4 @@ export default async function Page({ params }: { params: Params }) {
       <QuestionsClient quizId={quiz_id} />
     </Suspense>
   );
-}
-
-async function QuestionsClientWrapper({
-  params
-}: {
-  params: { quiz_id: string };
-}) {
-  return (
-    <QuestionsClient quizId={params.quiz_id} />
-  );
 } 

@@ -8,8 +8,6 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import { eligibilityTiers, getEligibilityTier } from '../../quiz/[quiz_id]/client';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { motion } from 'framer-motion';
 
 type ResultWithDetails = {
@@ -37,7 +35,6 @@ export function ResultId({ resultId }: { resultId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const certificateRef = useRef<HTMLDivElement>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -106,65 +103,33 @@ export function ResultId({ resultId }: { resultId: string }) {
     }
   }, [user, resultId, router]);
 
-  const downloadAsPDF = async () => {
-    if (!certificateRef.current) return;
-    
-    setIsGenerating(true);
-    try {
-      const canvas = await html2canvas(certificateRef.current, {
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        removeContainer: true,
-        onclone: (doc) => {
-          const elements = doc.querySelectorAll('*');
-          elements.forEach(el => {
-            if (el instanceof HTMLElement) {
-              if (getComputedStyle(el).color.includes('oklch')) {
-                el.style.color = '#000000';
-              }
-              if (getComputedStyle(el).backgroundColor.includes('oklch')) {
-                el.style.backgroundColor = '#ffffff';
-              }
-              if (getComputedStyle(el).borderColor.includes('oklch')) {
-                el.style.borderColor = '#cccccc';
-              }
-            }
-          });
-        }
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const imgWidth = 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      pdf.save(`${result?.quiz.title.replace(/\s+/g, '_')}_Certificate.pdf`);
-    } catch (err) {
-      console.error('Error generating PDF:', err);
-      setError('Failed to generate PDF. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   const addToLinkedIn = () => {
     // LinkedIn's Add to Profile URL format
     const title = encodeURIComponent(`${result?.quiz.title} Certification`);
-    const organization = encodeURIComponent('Quiz App');
+    const organization = encodeURIComponent('Thinkify Quiz Platform');
     const issueYear = new Date(result?.completed_at || '').getFullYear();
     const issueMonth = new Date(result?.completed_at || '').getMonth() + 1;
     
     const linkedInUrl = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${title}&organizationName=${organization}&issueYear=${issueYear}&issueMonth=${issueMonth}&certUrl=${window.location.href}`;
     
     window.open(linkedInUrl, '_blank');
+  };
+
+  const shareOnSocialMedia = () => {
+    const shareText = `I just earned a certificate in ${result?.quiz.title} with a score of ${result?.score}%! 🎉`;
+    const shareUrl = window.location.href;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: 'My Quiz Certificate',
+        text: shareText,
+        url: shareUrl,
+      });
+    } else {
+      // Fallback to copying to clipboard
+      navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+      alert('Certificate link copied to clipboard!');
+    }
   };
 
   if (authLoading || isLoading) {
@@ -374,19 +339,18 @@ export function ResultId({ resultId }: { resultId: string }) {
               className="flex flex-col sm:flex-row gap-4"
             >
               <Button 
-                onClick={downloadAsPDF}
-                isLoading={isGenerating}
-                fullWidth
-              >
-                {isGenerating ? 'Generating PDF...' : 'Download Certificate (PDF)'}
-              </Button>
-              
-              <Button 
                 onClick={addToLinkedIn}
                 variant="outline"
                 fullWidth
               >
                 Add to LinkedIn Profile
+              </Button>
+              <Button 
+                onClick={shareOnSocialMedia}
+                variant="outline"
+                fullWidth
+              >
+                Share on Social Media
               </Button>
             </motion.div>
           </>

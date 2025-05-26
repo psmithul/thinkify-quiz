@@ -1,66 +1,36 @@
 'use client';
 
-import { motion } from 'framer-motion';
-
 interface LoadingIndicatorProps {
   size?: 'sm' | 'md' | 'lg';
-  color?: 'purple' | 'blue' | 'green';
   message?: string;
+  className?: string;
 }
 
 export function LoadingIndicator({ 
   size = 'md', 
-  color = 'purple',
-  message = 'Loading...'
+  message = 'Loading...', 
+  className = '' 
 }: LoadingIndicatorProps) {
-  
-  const sizeMap = {
-    sm: 'h-8 w-8 border-2',
-    md: 'h-12 w-12 border-t-2 border-b-2',
-    lg: 'h-16 w-16 border-4',
+  const sizeClasses = {
+    sm: 'h-6 w-6',
+    md: 'h-8 w-8',
+    lg: 'h-12 w-12'
   };
-  
-  const colorMap = {
-    purple: 'border-purple-500',
-    blue: 'border-blue-500',
-    green: 'border-green-500',
-  };
-  
-  const containerAnimation = {
-    hidden: { opacity: 0 },
-    show: { 
-      opacity: 1,
-      transition: { 
-        staggerChildren: 0.2,
-        delayChildren: 0.3
-      }
-    }
-  };
-  
-  const itemAnimation = {
-    hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0 }
+
+  const textSizeClasses = {
+    sm: 'text-sm',
+    md: 'text-base',
+    lg: 'text-lg'
   };
 
   return (
-    <motion.div 
-      className="flex flex-col justify-center items-center h-64"
-      variants={containerAnimation}
-      initial="hidden"
-      animate="show"
-    >
-      <motion.div 
-        className={`animate-spin rounded-full ${sizeMap[size]} ${colorMap[color]}`}
-        variants={itemAnimation}
-      />
+    <div className={`flex flex-col items-center justify-center py-8 ${className}`}>
+      <div className={`animate-spin rounded-full border-t-2 border-b-2 border-purple-500 ${sizeClasses[size]}`}></div>
       {message && (
-        <motion.p 
-          className="text-gray-500 mt-4 text-center font-medium"
-          variants={itemAnimation}
-        >
+        <p className={`mt-4 text-gray-600 ${textSizeClasses[size]}`}>
           {message}
-        </motion.p>
+        </p>
       )}
-    </motion.div>
+    </div>
   );
 } 

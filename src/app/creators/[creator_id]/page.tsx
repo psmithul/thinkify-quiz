@@ -4,7 +4,7 @@ import { CreatorProfile } from './client';
 type Params = Promise<{ creator_id: string }>;
 
 // Server Component
-export default async function CreatorProfilePage({ params }: { params: Params }) {
+export default async function CreatorPublicProfilePage({ params }: { params: Promise<Params> }) {
   const { creator_id } = await params;
   
   return (

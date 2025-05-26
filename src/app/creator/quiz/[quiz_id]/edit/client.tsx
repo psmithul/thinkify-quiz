@@ -45,6 +45,7 @@ export function QuizEditor({ quizId }: { quizId: string }) {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('0');
   const [isPublished, setIsPublished] = useState(false);
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
   
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
@@ -145,6 +146,7 @@ export function QuizEditor({ quizId }: { quizId: string }) {
         setDescription(quizData.description || '');
         setPrice(quizData.price ? quizData.price.toString() : '0');
         setIsPublished(quizData.is_published || false);
+        setTimeLimitMinutes(quizData.time_limit_minutes || null);
         setQuestions(questionsData || []);
       } catch (err) {
         setError(formatErrorMessage(err));
@@ -183,6 +185,7 @@ export function QuizEditor({ quizId }: { quizId: string }) {
           description,
           price: priceValue === 0 ? null : priceValue,
           is_published: isPublished,
+          time_limit_minutes: timeLimitMinutes,
           updated_at: new Date().toISOString()
         })
         .eq('id', quizId);
@@ -530,6 +533,28 @@ export function QuizEditor({ quizId }: { quizId: string }) {
                 />
               </div>
               <p className="mt-1 text-sm text-gray-500">Leave as 0 to make the quiz free</p>
+            </div>
+            
+            <div>
+              <label htmlFor="time_limit" className="block text-sm font-medium text-gray-700">
+                Time Limit (Optional)
+              </label>
+              <div className="mt-1 flex items-center space-x-3">
+                <input
+                  type="number"
+                  id="time_limit"
+                  min="1"
+                  max="180"
+                  value={timeLimitMinutes || ''}
+                  onChange={(e) => setTimeLimitMinutes(e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                  placeholder="30"
+                />
+                <span className="text-sm text-gray-500">minutes</span>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Leave empty for no time limit. Recommended: 10-30 minutes for most quizzes.
+              </p>
             </div>
             
             <div className="flex items-center">

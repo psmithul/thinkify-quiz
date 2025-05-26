@@ -6,7 +6,7 @@ import QuizClient from './client';
 type Params = Promise<{ quiz_id: string }>;
 
 // Server Component
-export default async function Page({ params }: { params: Params }) {
+export default async function Page({ params }: { params: Promise<Params> }) {
   const { quiz_id } = await params;
   
   return (
@@ -15,7 +15,6 @@ export default async function Page({ params }: { params: Params }) {
         <LoadingIndicator
           size="lg"
           message="Loading quiz details..."
-          color="purple"
         />
       </Layout>
     }>

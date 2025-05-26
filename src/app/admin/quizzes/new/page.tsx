@@ -6,7 +6,6 @@ import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useAuth } from '@/lib/authContext';
-import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 
 export default function CreateQuizPage() {

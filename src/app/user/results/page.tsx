@@ -7,9 +7,9 @@ import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
-import { eligibilityTiers, getEligibilityTier, EligibilityTier } from '../quiz/[quiz_id]/client';
+import { getEligibilityTier, EligibilityTier } from '../quiz/[quiz_id]/client';
 import { motion } from 'framer-motion';
-import { JobOpportunities } from '@/app/components/JobOpportunities';
+import { CompanyShortlist } from '@/components/CompanyShortlist';
 
 type Result = {
   id: string;
@@ -32,7 +32,7 @@ export default function UserResults() {
   const [selectedResult, setSelectedResult] = useState<Result | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showJobOpportunities, setShowJobOpportunities] = useState(false);
+  const [showCompanyOpportunities, setShowCompanyOpportunities] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -81,13 +81,13 @@ export default function UserResults() {
     return getEligibilityTier(result.score);
   };
 
-  const handleShowJobOpportunities = (result: Result) => {
+  const handleShowCompanyOpportunities = (result: Result) => {
     setSelectedResult(result);
-    setShowJobOpportunities(true);
+    setShowCompanyOpportunities(true);
   };
 
   const handleBackToResults = () => {
-    setShowJobOpportunities(false);
+    setShowCompanyOpportunities(false);
     setSelectedResult(null);
   };
 
@@ -101,12 +101,12 @@ export default function UserResults() {
     );
   }
 
-  if (showJobOpportunities && selectedResult) {
+  if (showCompanyOpportunities && selectedResult) {
     return (
       <Layout>
         <div className="space-y-8">
           <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">Job Opportunities</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Company Opportunities</h1>
             <Button 
               variant="outline" 
               onClick={handleBackToResults}
@@ -115,9 +115,8 @@ export default function UserResults() {
             </Button>
           </div>
 
-          <JobOpportunities 
-            score={selectedResult.score} 
-            quizType={selectedResult.quiz?.category || selectedResult.quiz?.title || 'General Knowledge'} 
+          <CompanyShortlist 
+            userTier={getEligibilityTierForResult(selectedResult).tier}
           />
         </div>
       </Layout>
@@ -194,6 +193,12 @@ export default function UserResults() {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
                           <button
+                            className="text-indigo-600 hover:text-indigo-900"
+                            onClick={() => router.push(`/user/results/${result.id}`)}
+                          >
+                            View Details
+                          </button>
+                          <button
                             className="text-purple-600 hover:text-purple-900"
                             onClick={() => router.push(`/user/quiz/${result.quiz_id}`)}
                           >
@@ -201,9 +206,9 @@ export default function UserResults() {
                           </button>
                           <button
                             className="text-blue-600 hover:text-blue-900"
-                            onClick={() => handleShowJobOpportunities(result)}
+                            onClick={() => handleShowCompanyOpportunities(result)}
                           >
-                            Job Matches
+                            Company Opportunities
                           </button>
                           {eligibilityTier.tier >= 3 && (
                             <button

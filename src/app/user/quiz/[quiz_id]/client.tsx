@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
+import QuizTimer from '@/components/QuizTimer';
 
 // Updated question type to match quiz_questions table
 type Question = {
@@ -33,6 +34,7 @@ type Quiz = {
   description: string;
   created_at: string;
   creator_id?: string;
+  time_limit_minutes?: number;
   creator?: {
     id: string;
     full_name?: string;
@@ -132,12 +134,59 @@ export default function QuizClient({
   const [score, setScore] = useState<number | null>(null);
   const [eligibilityTier, setEligibilityTier] = useState<EligibilityTier | null>(null);
   const [resultId, setResultId] = useState<string | null>(null);
+  
+  // Timer and quiz attempt state
+  const [quizStartTime, setQuizStartTime] = useState<Date | null>(null);
+  const [isQuizStarted, setIsQuizStarted] = useState(false);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [showExitWarning, setShowExitWarning] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
     }
   }, [authLoading, user, router]);
+
+  // Prevent quiz exit during active quiz
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isQuizStarted && !score) {
+        e.preventDefault();
+        e.returnValue = 'You have an active quiz. Are you sure you want to leave? Your progress will be lost.';
+        return e.returnValue;
+      }
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (isQuizStarted && !score) {
+        const confirmed = window.confirm('You have an active quiz. Are you sure you want to leave? Your progress will be lost.');
+        if (!confirmed) {
+          window.history.pushState(null, '', window.location.href);
+        }
+      }
+    };
+
+    if (isQuizStarted && !score) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('popstate', handlePopState);
+      
+      // Prevent back button
+      window.history.pushState(null, '', window.location.href);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isQuizStarted, score]);
+
+  // Timer completion handler
+  const handleTimeUp = useCallback(async () => {
+    if (!isSubmitting && isQuizStarted) {
+      console.log('Timer expired, auto-submitting quiz...');
+      await handleSubmitQuiz(true); // Pass true to indicate auto-submission
+    }
+  }, [isSubmitting, isQuizStarted]);
 
   useEffect(() => {
     async function fetchQuizData() {
@@ -276,7 +325,41 @@ export default function QuizClient({
     }
   }
 
-  async function handleSubmitQuiz() {
+  // Start quiz function
+  const startQuiz = async () => {
+    if (!user || !quiz) return;
+    
+    try {
+      const startTime = new Date();
+      setQuizStartTime(startTime);
+      setIsQuizStarted(true);
+      
+      // Create quiz attempt record
+      const { data: attemptData, error: attemptError } = await supabase
+        .from('quiz_attempts')
+        .insert({
+          quiz_id: quizId,
+          user_id: user.id,
+          started_at: startTime.toISOString(),
+          is_completed: false
+        })
+        .select()
+        .single();
+        
+      if (attemptError) {
+        console.error('Error creating quiz attempt:', attemptError);
+        throw attemptError;
+      }
+      
+      setAttemptId(attemptData.id);
+      console.log('Quiz started, attempt ID:', attemptData.id);
+    } catch (err) {
+      console.error('Error starting quiz:', err);
+      setError(formatErrorMessage(err));
+    }
+  };
+
+  async function handleSubmitQuiz(autoSubmit: boolean = false) {
     if (!user || !quiz) return;
     
     setIsSubmitting(true);
@@ -285,7 +368,7 @@ export default function QuizClient({
     try {
       const allQuestionsAnswered = questions.every(q => answers[q.id]);
       
-      if (!allQuestionsAnswered) {
+      if (!autoSubmit && !allQuestionsAnswered) {
         throw new Error('Please answer all questions before submitting');
       }
       
@@ -313,26 +396,56 @@ export default function QuizClient({
       const finalScore = totalPoints > 0 ? Math.round((correctAnswers / totalPoints) * 100) : 0;
       const tier = getEligibilityTier(finalScore);
       
-      // Save results to database
-      const { data, error } = await supabase
-        .from('quiz_attempts')
-        .upsert({
-          quiz_id: quizId,
-          user_id: user.id,
-          score: finalScore,
-          max_score: totalPoints,
-          completed: true,
-          completed_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-        
-      if (error) throw error;
+      // Calculate time taken
+      const endTime = new Date();
+      const timeTakenSeconds = quizStartTime ? Math.round((endTime.getTime() - quizStartTime.getTime()) / 1000) : null;
       
-      setResultId(data.id);
+      // Update the existing attempt or create new one
+      const attemptData = {
+        quiz_id: quizId,
+        user_id: user.id,
+        score: finalScore,
+        max_score: totalPoints,
+        is_completed: true,
+        completed_at: endTime.toISOString(),
+        time_taken_seconds: timeTakenSeconds,
+        answers: JSON.stringify(answers)
+      };
+      
+      let resultData;
+      if (attemptId) {
+        // Update existing attempt
+        const { data, error } = await supabase
+          .from('quiz_attempts')
+          .update(attemptData)
+          .eq('id', attemptId)
+          .select()
+          .single();
+          
+        if (error) throw error;
+        resultData = data;
+      } else {
+        // Create new attempt (fallback)
+        const { data, error } = await supabase
+          .from('quiz_attempts')
+          .insert(attemptData)
+          .select()
+          .single();
+          
+        if (error) throw error;
+        resultData = data;
+      }
+      
+      setResultId(resultData.id);
       setScore(finalScore);
       setEligibilityTier(tier);
-      setSuccess('Quiz completed successfully!');
+      setIsQuizStarted(false); // Allow navigation again
+      
+      if (autoSubmit) {
+        setSuccess('Time\'s up! Quiz has been automatically submitted.');
+      } else {
+        setSuccess('Quiz completed successfully!');
+      }
       
     } catch (err) {
       setError(formatErrorMessage(err));
@@ -424,15 +537,33 @@ export default function QuizClient({
   
   return (
     <Layout>
+      {/* Quiz Timer - only show when quiz has time limit and is started */}
+      {quiz?.time_limit_minutes && isQuizStarted && !score && (
+        <QuizTimer
+          timeLimitMinutes={quiz.time_limit_minutes}
+          onTimeUp={handleTimeUp}
+          isActive={true}
+        />
+      )}
+      
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">{quiz.title}</h1>
-          <Button
-            variant="outline"
-            onClick={() => router.push('/user/dashboard')}
-          >
-            Exit Quiz
-          </Button>
+          {!isQuizStarted || score !== null ? (
+            <Button
+              variant="outline"
+              onClick={() => router.push('/user/dashboard')}
+            >
+              {score !== null ? 'Back to Dashboard' : 'Exit'}
+            </Button>
+          ) : (
+            <div className="flex items-center space-x-3 text-amber-600 bg-amber-50 px-4 py-2 rounded-lg border border-amber-200">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span className="text-sm font-medium">Quiz in progress - Exit blocked</span>
+            </div>
+          )}
         </div>
         
         {error && (
@@ -451,7 +582,58 @@ export default function QuizClient({
           <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
             <p className="text-yellow-700">This quiz doesn't have any questions yet.</p>
           </div>
+        ) : !isQuizStarted && score === null ? (
+          // Quiz start screen
+          <div className="bg-white shadow rounded-lg p-8 border border-gray-200 text-center">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Ready to Start?</h2>
+              {quiz.description && (
+                <p className="text-gray-600 mb-4">{quiz.description}</p>
+              )}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
+                <div className="flex items-center justify-center space-x-6 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-blue-700 font-medium">{questions.length} Questions</span>
+                  </div>
+                  {quiz.time_limit_minutes && (
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-blue-700 font-medium">{quiz.time_limit_minutes} Minutes</span>
+                    </div>
+                  )}
+                  {!quiz.time_limit_minutes && (
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-green-700 font-medium">No Time Limit</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {quiz.time_limit_minutes && (
+                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mb-6">
+                  <p className="text-amber-800 text-sm">
+                    ⚠️ <strong>Important:</strong> Once you start, you cannot exit the quiz until completion or time expires.
+                  </p>
+                </div>
+              )}
+            </div>
+            <Button
+              onClick={startQuiz}
+              size="lg"
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+            >
+              🚀 Start Quiz
+            </Button>
+          </div>
         ) : (
+          // Quiz questions interface
           <div className="bg-white shadow rounded-lg p-6 border border-gray-200">
             <div className="flex justify-between mb-4">
               <span className="text-sm text-gray-500">
@@ -460,6 +642,14 @@ export default function QuizClient({
               <span className="text-sm text-gray-500">
                 {currentQuestion.points} point{currentQuestion.points !== 1 ? 's' : ''}
               </span>
+            </div>
+            
+            {/* Progress bar */}
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
+              <div 
+                className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
+              ></div>
             </div>
             
             <h2 className="text-xl font-medium text-gray-900 mb-6">{currentQuestion.question}</h2>
@@ -479,7 +669,7 @@ export default function QuizClient({
                     />
                     <label 
                       htmlFor={`option-${option.id}`}
-                      className="ml-3 block text-gray-700"
+                      className="ml-3 block text-gray-700 cursor-pointer p-2 rounded hover:bg-gray-50"
                     >
                       {option.option_text}
                     </label>
@@ -515,8 +705,9 @@ export default function QuizClient({
                 </Button>
               ) : (
                 <Button 
-                  onClick={handleSubmitQuiz}
+                  onClick={() => handleSubmitQuiz()}
                   disabled={isSubmitting}
+                  className="bg-green-600 hover:bg-green-700"
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Quiz'}
                 </Button>

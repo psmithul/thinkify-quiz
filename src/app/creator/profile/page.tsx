@@ -22,6 +22,9 @@ export default function CreatorProfile() {
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
   const [profileImage, setProfileImage] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [currentCompany, setCurrentCompany] = useState('');
+  const [previousCompanies, setPreviousCompanies] = useState<string[]>(['']);
   const [quizStats, setQuizStats] = useState<QuizStats>({
     totalQuizzes: 0,
     publishedQuizzes: 0,
@@ -35,12 +38,20 @@ export default function CreatorProfile() {
   const [success, setSuccess] = useState<string | null>(null);
   
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/login');
-    } else if (!authLoading && user && user.role !== 'creator' && user.role !== 'admin') {
-      router.push('/user/dashboard');
+    // once auth has finished loading...
+    if (!authLoading) {
+      // 1) if there's no user, send them to login
+      if (!user) {
+        router.push('/auth/login');
+        return;
+      }
+      // 2) if they're not creator/admin, redirect to user dashboard  
+      else if (user.role === 'user') {
+        router.push('/user/dashboard');
+        return;
+      }
     }
-  }, [authLoading, user, router]);
+  }, [authLoading, user, router])
 
   useEffect(() => {
     async function fetchCreatorProfile() {
@@ -59,6 +70,9 @@ export default function CreatorProfile() {
         setFullName(data.full_name || '');
         setBio(data.bio || '');
         setProfileImage(data.profile_image || '');
+        setLinkedinUrl(data.linkedin_url || '');
+        setCurrentCompany(data.current_company || '');
+        setPreviousCompanies(data.previous_companies || ['']);
 
         // Fetch quiz statistics
         const { data: quizzes, error: quizzesError } = await supabase
@@ -107,10 +121,16 @@ export default function CreatorProfile() {
       }
     }
 
-    if (user && (user.role === 'creator' || user.role === 'admin')) {
-      fetchCreatorProfile();
+    // Handle loading state properly for all cases
+    if (!authLoading) {
+      if (user && (user.role === 'creator' || user.role === 'admin')) {
+        fetchCreatorProfile();
+      } else {
+        // For non-creators or no user, stop loading immediately
+        setIsLoading(false);
+      }
     }
-  }, [user]);
+  }, [authLoading, user]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +144,10 @@ export default function CreatorProfile() {
         .update({
           full_name: fullName,
           bio,
-          profile_image: profileImage
+          profile_image: profileImage,
+          linkedin_url: linkedinUrl,
+          current_company: currentCompany,
+          previous_companies: previousCompanies
         })
         .eq('id', user?.id);
         
@@ -151,7 +174,9 @@ export default function CreatorProfile() {
     <Layout>
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">My Creator Profile</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            My Creator Profile
+          </h1>
           <Button 
             variant="outline" 
             onClick={() => router.push('/creator/dashboard')}
@@ -201,6 +226,7 @@ export default function CreatorProfile() {
         
         <div className="bg-white shadow rounded-lg p-6 border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Profile Information</h2>
+          
           <form onSubmit={handleSaveProfile} className="space-y-6">
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
@@ -243,6 +269,48 @@ export default function CreatorProfile() {
                   />
                 </div>
               )}
+            </div>
+            
+            <div>
+              <label htmlFor="linkedinUrl" className="block text-sm font-medium text-gray-700">
+                LinkedIn URL
+              </label>
+              <input
+                type="url"
+                id="linkedinUrl"
+                value={linkedinUrl}
+                onChange={(e) => setLinkedinUrl(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                placeholder="https://www.linkedin.com/in/your-profile"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="currentCompany" className="block text-sm font-medium text-gray-700">
+                Current Company
+              </label>
+              <input
+                type="text"
+                id="currentCompany"
+                value={currentCompany}
+                onChange={(e) => setCurrentCompany(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                placeholder="Your current company"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="previousCompanies" className="block text-sm font-medium text-gray-700">
+                Previous Companies
+              </label>
+              <input
+                type="text"
+                id="previousCompanies"
+                value={previousCompanies.join(', ')}
+                onChange={(e) => setPreviousCompanies(e.target.value.split(',').map(c => c.trim()))}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                placeholder="Separate companies with commas"
+              />
             </div>
             
             <div>

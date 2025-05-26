@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Main LinkedIn Login</title>
+</head>
+<body>
+    <h1>Test Main LinkedIn Login Flow</h1>
+    
+    <div>
+        <h2>Configuration Check</h2>
+        <p>Client ID: 865iwdnmx2n4fy</p>
+        <p>Redirect URI: http://localhost:3001/auth/linkedin/callback</p>
+        <p>Scopes: openid profile email</p>
+    </div>
+    
+    <div>
+        <h2>Test OAuth Flow</h2>
+        <button onclick="startMainLinkedInAuth()">Start Main LinkedIn Auth (Production Flow)</button>
+        <button onclick="testAPI()">Test API Direct</button>
+    </div>
+    
+    <div id="result"></div>
+    
+    <script>
+        function startMainLinkedInAuth() {
+            const clientId = '865iwdnmx2n4fy';
+            const redirectUri = 'http://localhost:3001/auth/linkedin/callback';
+            const scope = 'openid profile email';
+            const state = 'main_test_' + Math.random().toString(36).substring(2, 15);
+            
+            // Store state for verification  
+            sessionStorage.setItem('linkedin_oauth_state', state);
+            
+            const authUrl = `https://www.linkedin.com/oauth/v2/authorization?` +
+                `response_type=code&` +
+                `client_id=${clientId}&` +
+                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+                `scope=${encodeURIComponent(scope)}&` +
+                `state=${state}`;
+            
+            console.log('Starting main LinkedIn OAuth with URL:', authUrl);
+            document.getElementById('result').innerHTML = `
+                <h3>Redirecting to LinkedIn...</h3>
+                <p>Auth URL: ${authUrl}</p>
+                <p>This should redirect to: ${redirectUri} after auth</p>
+            `;
+            
+            setTimeout(() => {
+                window.location.href = authUrl;
+            }, 2000);
+        }
+        
+        async function testAPI() {
+            const code = prompt('Enter LinkedIn authorization code to test API:');
+            if (!code) return;
+            
+            try {
+                document.getElementById('result').innerHTML = '<p>Testing API...</p>';
+                
+                const response = await fetch('/api/auth/linkedin/userinfo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        code,
+                        redirectUri: 'http://localhost:3001/auth/linkedin/callback'
+                    }),
+                });
+                
+                const result = await response.json();
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>API Test Result</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <h3>API Test Error</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html> 

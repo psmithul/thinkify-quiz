@@ -26,7 +26,13 @@ export default function QuestionsClient({
   const router = useRouter();
   const { user, isAdmin, isLoading: authLoading } = useAuth();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<{
+    id: string;
+    prompt: string;
+    type: 'multiple_choice' | 'text';
+    options?: string[];
+    correct_answer: string;
+  }[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionFormData>({
     prompt: '',
     type: 'multiple_choice',
