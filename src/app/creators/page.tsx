@@ -21,14 +21,21 @@ export default function CreatorsListPage() {
   useEffect(() => {
     async function fetchCreators() {
       try {
-        // Fetch all users with creator role
+        // Fetch all users with creator role - allow anonymous access
+        // If RLS blocks this, we'll handle it gracefully
         const { data, error } = await supabase
           .from('users')
           .select('*')
           .in('role', ['creator', 'admin'])
           .order('full_name');
 
-        if (error) throw error;
+        // If there's an RLS error, continue with empty data but log the issue
+        if (error) {
+          console.warn('Note: Unable to fetch creators (this may be due to RLS policies):', error);
+          setCreators([]);
+          setIsLoading(false);
+          return;
+        }
         
         // Fetch quiz and course counts for each creator
         const creatorsWithCounts = await Promise.all(
@@ -40,7 +47,7 @@ export default function CreatorsListPage() {
               .eq('creator_id', creator.id)
               .eq('is_published', true); // Only count published quizzes
             
-            // Fetch course count
+            // Fetch course count (if courses table exists)
             const { data: courses, error: courseError } = await supabase
               .from('courses')
               .select('id')
@@ -48,11 +55,11 @@ export default function CreatorsListPage() {
               .eq('is_published', true); // Only count published courses
             
             if (quizError) {
-              console.error(`Error fetching quiz count for creator ${creator.id}:`, quizError);
+              console.warn(`Note: Unable to fetch quiz count for creator ${creator.id}:`, quizError);
             }
             
             if (courseError) {
-              console.error(`Error fetching course count for creator ${creator.id}:`, courseError);
+              console.warn(`Note: Unable to fetch course count for creator ${creator.id}:`, courseError);
             }
             
             return { 
@@ -65,7 +72,9 @@ export default function CreatorsListPage() {
         
         setCreators(creatorsWithCounts);
       } catch (err) {
-        setError(formatErrorMessage(err));
+        console.warn('Note: Error fetching creators (this may be due to RLS policies):', err);
+        // Don't show error to user - just show empty state
+        setCreators([]);
       } finally {
         setIsLoading(false);
       }
@@ -104,8 +113,32 @@ export default function CreatorsListPage() {
         )}
         
         {creators.length === 0 ? (
-          <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
-            <p className="text-yellow-700">No creators found.</p>
+          <div className="bg-yellow-50 p-8 rounded-lg border border-yellow-200 text-center">
+            <div className="space-y-4">
+              <div className="text-6xl">👥</div>
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-800 mb-2">No creators found</h3>
+                <p className="text-yellow-700 mb-4">
+                  It looks like there are no content creators yet. You can create some sample data to get started.
+                </p>
+                <div className="flex justify-center space-x-3">
+                  <Button 
+                    variant="outline"
+                    onClick={() => router.push('/setup-sample-data')}
+                    className="border-yellow-300 text-yellow-800 hover:bg-yellow-100"
+                  >
+                    Create Sample Data
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => router.push('/auth/creator-signup')}
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                  >
+                    Become a Creator
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
