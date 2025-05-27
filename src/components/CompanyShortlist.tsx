@@ -4,6 +4,15 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 
+type Recruiter = {
+  id: string;
+  name: string;
+  linkedin_url: string;
+  position?: string;
+  bio?: string;
+  profile_image_url?: string;
+};
+
 type Company = {
   id: string;
   name: string;
@@ -13,6 +22,7 @@ type Company = {
   website?: string;
   description?: string;
   logo_url?: string;
+  recruiters?: Recruiter[];
 };
 
 interface CompanyShortlistProps {
@@ -37,15 +47,36 @@ export function CompanyShortlist({ userTier }: CompanyShortlistProps) {
       setIsLoading(true);
       
       // Fetch companies for the user's tier and below (they qualify for these positions)
-      const { data, error } = await supabase
+      const { data: companiesData, error: companiesError } = await supabase
         .from('companies')
         .select('*')
         .lte('tier', userTier) // Less than or equal to user's tier
         .order('tier', { ascending: false }) // Show highest tier first
         .order('name', { ascending: true });
 
-      if (error) throw error;
-      setCompanies(data || []);
+      if (companiesError) throw companiesError;
+
+      // Fetch recruiters for each company
+      const companiesWithRecruiters = await Promise.all(
+        (companiesData || []).map(async (company) => {
+          const { data: recruiters, error: recruitersError } = await supabase
+            .from('recruiters')
+            .select('id, name, linkedin_url, position, bio, profile_image_url')
+            .eq('company_id', company.id)
+            .eq('is_active', true);
+
+          if (recruitersError) {
+            console.warn(`Unable to fetch recruiters for ${company.name}:`, recruitersError);
+          }
+
+          return {
+            ...company,
+            recruiters: recruiters || []
+          };
+        })
+      );
+
+      setCompanies(companiesWithRecruiters);
     } catch (err) {
       setError(formatErrorMessage(err));
     } finally {
@@ -143,6 +174,40 @@ export function CompanyShortlist({ userTier }: CompanyShortlistProps) {
                   {company.description && (
                     <p className="text-sm text-gray-500 mt-2 line-clamp-2">{company.description}</p>
                   )}
+                  
+                  {/* Recruiters Section */}
+                  {company.recruiters && company.recruiters.length > 0 && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
+                        <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Connect with Recruiters
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {company.recruiters.map((recruiter) => (
+                          <a
+                            key={recruiter.id}
+                            href={recruiter.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors duration-200 shadow-sm group"
+                            onClick={(e) => e.stopPropagation()}
+                            title={recruiter.bio || `${recruiter.position || 'Recruiter'} at ${company.name}`}
+                          >
+                            <svg className="h-4 w-4 mr-1.5" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                            </svg>
+                            {recruiter.name}
+                            {recruiter.position && (
+                              <span className="text-xs text-blue-200 ml-1">({recruiter.position})</span>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex items-center justify-between mt-3">
                     <div className="text-xs text-gray-500">
                       {TIER_LABELS[company.tier as keyof typeof TIER_LABELS]?.description}
@@ -179,7 +244,7 @@ export function CompanyShortlist({ userTier }: CompanyShortlistProps) {
             <h4 className="text-sm font-medium text-purple-900">How it works</h4>
             <p className="text-sm text-purple-700 mt-1">
               Companies are categorized by tiers based on position levels. Your quiz performance determines which tiers you qualify for. 
-              Higher scores unlock access to more senior positions at top-tier companies.
+              Higher scores unlock access to more senior positions at top-tier companies. Connect with recruiters on LinkedIn to explore opportunities!
             </p>
           </div>
         </div>

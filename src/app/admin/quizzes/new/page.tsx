@@ -6,6 +6,7 @@ import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useAuth } from '@/lib/authContext';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { formatErrorMessage } from '@/utils/errorHandler';
 
 export default function CreateQuizPage() {
@@ -34,12 +35,12 @@ export default function CreateQuizPage() {
         throw new Error('You must be logged in to create a quiz');
       }
       
-      // Import the admin client to bypass RLS
-      const { createAdminClient } = await import('@/lib/supabaseClient');
-      const adminSupabase = createAdminClient();
+      // Use admin client to bypass RLS
+      // const { createAdminClient } = await import('@/lib/supabaseClient');
+      // const adminSupabase = createAdminClient();
 
       // Create new quiz using admin client to bypass RLS
-      const { data, error: quizError } = await adminSupabase
+      const { data, error: quizError } = await supabaseAdmin
         .from('quizzes')
         .insert([
           { 

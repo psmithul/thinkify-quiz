@@ -52,39 +52,8 @@ export function validateFormInput(input: Record<string, unknown>): FormError[] {
   return errors;
 }
 
-// Create user-friendly error message
+// Utility function to format error messages consistently across the app
 export function formatErrorMessage(error: unknown): string {
-  // Handle Supabase authentication errors
-  if (error instanceof AuthError) {
-    if (error.message.includes('Email already registered')) {
-      return 'This email is already registered. Please try logging in or use a different email.';
-    }
-    
-    if (error.message.includes('rate limit')) {
-      return 'Too many attempts. Please wait a moment before trying again.';
-    }
-    
-    return `Authentication error: ${error.message}`;
-  }
-  
-  // Handle Supabase database errors
-  if (typeof error === 'object' && error !== null) {
-    const pgError = error as PostgrestError;
-    
-    if (pgError.code === '23505') {
-      return 'This record already exists. Please try again with different information.';
-    }
-    
-    if (pgError.code === '42P01') {
-      return 'Database tables do not exist yet. Please run the setup command.';
-    }
-    
-    if (pgError.message) {
-      return `Database error: ${pgError.message}`;
-    }
-  }
-  
-  // Handle standard errors
   if (error instanceof Error) {
     return error.message;
   }
@@ -93,6 +62,9 @@ export function formatErrorMessage(error: unknown): string {
     return error;
   }
   
-  // Default case
-  return 'An unexpected error occurred';
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  
+  return 'An unexpected error occurred. Please try again.';
 } 

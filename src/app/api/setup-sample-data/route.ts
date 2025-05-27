@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabaseClient';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function POST(request: NextRequest) {
   try {
     console.log('Creating sample data...');
 
     // Use admin client to bypass RLS
-    const supabaseAdmin = createAdminClient();
+    // const supabaseAdmin = createAdminClient(); // Removed - using import instead
 
     // Insert sample creator users
     const sampleUsers = [
