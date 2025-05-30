@@ -29,6 +29,8 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
   useEffect(() => {
     async function fetchCreatorProfile() {
       try {
+        console.log('Fetching creator profile for ID:', creatorId);
+        
         // Fetch creator profile
         const { data: creatorData, error: creatorError } = await supabase
           .from('users')
@@ -37,7 +39,12 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
           .in('role', ['creator', 'admin'])
           .single();
 
-        if (creatorError) throw creatorError;
+        if (creatorError) {
+          console.error('Error fetching creator data:', creatorError);
+          throw creatorError;
+        }
+        
+        console.log('Creator data loaded:', creatorData);
         
         // Fetch creator's quizzes
         const { data: quizzesData, error: quizzesError } = await supabase
@@ -47,7 +54,13 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
           .eq('is_published', true)
           .order('created_at', { ascending: false });
           
-        if (quizzesError) throw quizzesError;
+        if (quizzesError) {
+          console.error('Error fetching creator quizzes:', quizzesError);
+          // Don't throw here, just set empty array
+          console.warn('Setting empty quizzes array due to error');
+        }
+
+        console.log('Creator quizzes loaded:', quizzesData?.length || 0);
 
         // Fetch follower count
         const { count, error: followerCountError } = await supabase
@@ -55,7 +68,12 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
           .select('*', { count: 'exact', head: true })
           .eq('following_id', creatorId);
 
-        if (followerCountError) throw followerCountError;
+        if (followerCountError) {
+          console.error('Error fetching follower count:', followerCountError);
+          // Don't throw here, just set 0
+        }
+
+        console.log('Follower count loaded:', count || 0);
         
         setCreator({
           ...creatorData,
@@ -63,8 +81,9 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
           followerCount: count || 0
         });
 
-        // Check if current user is following this creator
+        // Check if current user is following this creator (only if logged in)
         if (user) {
+          console.log('Checking follow status for logged-in user:', user.id);
           const { data: followData, error: followError } = await supabase
             .from('follows')
             .select('*')
@@ -72,10 +91,19 @@ export function CreatorProfile({ creatorId }: { creatorId: string }) {
             .eq('following_id', creatorId)
             .maybeSingle();
 
-          if (followError) throw followError;
-          setIsFollowing(!!followData);
+          if (followError) {
+            console.error('Error checking follow status:', followError);
+            // Don't throw here, just set false
+          } else {
+            setIsFollowing(!!followData);
+            console.log('Follow status:', !!followData);
+          }
+        } else {
+          console.log('User not logged in, skipping follow check');
+          setIsFollowing(false);
         }
       } catch (err) {
+        console.error('Error in fetchCreatorProfile:', err);
         setError(formatErrorMessage(err));
       } finally {
         setIsLoading(false);

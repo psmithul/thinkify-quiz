@@ -223,42 +223,53 @@ export function Layout({ children }: LayoutProps) {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -10, scale: 0.95 }}
                           transition={{ duration: 0.2 }}
-                          className="absolute right-0 mt-2 w-64 dropdown z-50"
+                          className="absolute right-0 mt-2 w-64 z-[1000] bg-white border border-gray-200 rounded-lg shadow-lg"
+                          style={{ 
+                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                            position: 'absolute',
+                            top: '100%',
+                            right: 0,
+                            minWidth: '256px'
+                          }}
                         >
-                          <div className="p-4 border-b border-gray-100">
-                            <p className="font-semibold text-gray-900 line-clamp-1">{userData?.email}</p>
-                            <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
-                              <span className={`badge ${isAdmin ? 'badge-primary' : isCreator ? 'badge-secondary' : 'badge-outline'}`}>
-                                {userData?.role}
+                          <div className="p-4 border-b border-gray-100 bg-gray-50 rounded-t-lg">
+                            <p className="font-semibold text-gray-900 line-clamp-1 text-sm">{userData?.email}</p>
+                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isAdmin ? 'bg-red-100 text-red-800' : isCreator ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
+                                {userData?.role?.toUpperCase()}
                               </span>
                             </p>
                           </div>
 
                           {/* Mobile menu items */}
-                          <div className="md:hidden py-2">
+                          <div className="md:hidden py-2 bg-white">
                             {navigationLinks.map((link) => (
                               <Link
                                 key={link.href}
                                 href={link.href}
-                                className="dropdown-item"
+                                className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150"
+                                onClick={() => setDropdownOpen(false)}
                               >
-                                <span className="mr-3">{link.icon}</span>
-                                {link.label}
+                                <span className="mr-3 text-base">{link.icon}</span>
+                                <span className="font-medium">{link.label}</span>
                               </Link>
                             ))}
                           </div>
 
-                          <div className="py-2">
+                          <div className="py-2 bg-white">
                             {getUserLinks().map((link) => (
                               <Link
                                 key={link.href}
                                 href={link.href}
-                                className="dropdown-item"
+                                className="flex items-center justify-between px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150"
+                                onClick={() => setDropdownOpen(false)}
                               >
-                                <span className="mr-3">{link.icon}</span>
-                                {link.label}
+                                <div className="flex items-center">
+                                  <span className="mr-3 text-base">{link.icon}</span>
+                                  <span className="font-medium">{link.label}</span>
+                                </div>
                                 {link.badge && (
-                                  <span className={`badge ${link.badgeClass} ml-auto`}>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${link.badgeClass === 'badge-primary' ? 'bg-blue-100 text-blue-800' : link.badgeClass === 'badge-secondary' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
                                     {link.badge}
                                   </span>
                                 )}
@@ -267,11 +278,15 @@ export function Layout({ children }: LayoutProps) {
                             
                             <div className="border-t border-gray-100 mt-2 pt-2">
                               <button 
-                                onClick={(e) => {e.preventDefault(); signOut();}} 
-                                className="dropdown-item text-red-600 hover:bg-red-50 w-full"
+                                onClick={(e) => {
+                                  e.preventDefault(); 
+                                  setDropdownOpen(false);
+                                  signOut();
+                                }} 
+                                className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150"
                               >
-                                <span className="mr-3">🚪</span>
-                                Sign Out
+                                <span className="mr-3 text-base">🚪</span>
+                                <span className="font-medium">Sign Out</span>
                               </button>
                             </div>
                           </div>

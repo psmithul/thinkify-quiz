@@ -21,6 +21,12 @@ type ResultWithDetails = {
     id: string;
     title: string;
     description: string;
+    category: string;
+    tier_thresholds: string;
+    creator: {
+      full_name: string;
+      email: string;
+    };
   };
 };
 
@@ -35,6 +41,7 @@ export default function IndividualResultPage({ params }: PageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resultId, setResultId] = useState<string>('');
+  const [eligibilityTier, setEligibilityTier] = useState<ReturnType<typeof getEligibilityTier> | null>(null);
 
   // Unwrap params
   useEffect(() => {
@@ -58,28 +65,32 @@ export default function IndividualResultPage({ params }: PageProps) {
       try {
         console.log('Fetching result details for:', resultId);
         
-        // Fetch specific quiz result
+        // Fetch the result and related quiz data
         const { data, error } = await supabase
           .from('quiz_attempts')
           .select(`
             *,
-            quiz:quizzes(id, title, description)
+            quiz:quizzes(
+              id, 
+              title, 
+              description, 
+              category,
+              tier_thresholds,
+              creator:users(full_name, email)
+            )
           `)
           .eq('id', resultId)
-          .eq('user_id', user.id) // Ensure user can only see their own results
+          .eq('user_id', user.id)
           .single();
 
-        if (error) {
-          console.error('Error fetching quiz result:', error);
-          throw error;
-        }
-        
-        if (!data) {
-          throw new Error('Result not found or you do not have permission to view it');
-        }
-        
-        console.log('Quiz result loaded:', data);
+        if (error) throw error;
+        if (!data) throw new Error('Result not found');
+
         setResult(data);
+        
+        // Calculate eligibility tier with custom thresholds if available
+        const eligibilityTier = getEligibilityTier(data.score, data.quiz?.tier_thresholds);
+        setEligibilityTier(eligibilityTier);
       } catch (err) {
         setError(formatErrorMessage(err));
       } finally {
@@ -126,8 +137,6 @@ export default function IndividualResultPage({ params }: PageProps) {
       </Layout>
     );
   }
-
-  const eligibilityTier = getEligibilityTier(result.score);
 
   return (
     <Layout>
@@ -187,8 +196,8 @@ export default function IndividualResultPage({ params }: PageProps) {
             
             <div className="text-center p-4 bg-gray-50 rounded-lg">
               <div className="text-sm text-gray-500">Eligibility Tier</div>
-              <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${eligibilityTier.bgClass} ${eligibilityTier.textClass}`}>
-                Tier {eligibilityTier.tier}: {eligibilityTier.label}
+              <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${eligibilityTier?.bgClass} ${eligibilityTier?.textClass}`}>
+                Tier {eligibilityTier?.tier}: {eligibilityTier?.label}
               </div>
             </div>
           </div>
@@ -208,11 +217,12 @@ export default function IndividualResultPage({ params }: PageProps) {
             Retake Quiz
           </Button>
           
-          {eligibilityTier.tier >= 3 && (
+          {eligibilityTier && eligibilityTier.tier >= 3 && (
             <Button 
               onClick={() => router.push(`/user/certificate/${result.id}`)}
+              className="bg-green-600 hover:bg-green-700 text-white"
             >
-              View Certificate
+              🏆 View Certificate
             </Button>
           )}
         </motion.div>
@@ -224,7 +234,9 @@ export default function IndividualResultPage({ params }: PageProps) {
           transition={{ delay: 0.3 }}
         >
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Company Opportunities</h2>
-          <CompanyShortlist userTier={eligibilityTier.tier} />
+          {eligibilityTier && (
+            <CompanyShortlist userTier={eligibilityTier.tier} quizId={result.quiz_id} />
+          )}
         </motion.div>
       </motion.div>
     </Layout>

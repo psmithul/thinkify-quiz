@@ -40,6 +40,7 @@ export function Button({
   
   return (
     <button
+      type="button"
       className={combinedClassName}
       disabled={isLoading || disabled}
       aria-disabled={isLoading || disabled}

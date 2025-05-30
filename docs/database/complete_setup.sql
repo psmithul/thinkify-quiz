@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT,
     description TEXT,
+    category TEXT,
     is_published BOOLEAN DEFAULT false,
     price NUMERIC DEFAULT 0,
     creator_id UUID REFERENCES users(id),
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
 ALTER TABLE quizzes 
 ADD COLUMN IF NOT EXISTS title TEXT,
 ADD COLUMN IF NOT EXISTS description TEXT,
+ADD COLUMN IF NOT EXISTS category TEXT,
 ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT false,
 ADD COLUMN IF NOT EXISTS price NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS creator_id UUID REFERENCES users(id),

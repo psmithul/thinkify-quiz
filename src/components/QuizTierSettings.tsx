@@ -8,7 +8,7 @@ interface TierThreshold {
   max_score: number;
 }
 
-interface TierThresholds {
+export interface TierThresholds {
   tier_1: TierThreshold;
   tier_2: TierThreshold;
   tier_3: TierThreshold;
@@ -44,10 +44,19 @@ export function QuizTierSettings({ initialThresholds, onSave, className = '' }: 
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isDirty, setIsDirty] = useState(false);
+  const [currentPreset, setCurrentPreset] = useState<'easy' | 'normal' | 'hard' | 'custom'>('normal');
 
   useEffect(() => {
-    if (initialThresholds) {
+    // Only update if initialThresholds is different from current state
+    if (initialThresholds && JSON.stringify(initialThresholds) !== JSON.stringify(thresholds)) {
       setThresholds(initialThresholds);
+      setIsDirty(false);
+      // Determine current preset based on thresholds
+      if (JSON.stringify(initialThresholds) === JSON.stringify(DEFAULT_THRESHOLDS)) {
+        setCurrentPreset('normal');
+      } else {
+        setCurrentPreset('custom');
+      }
     }
   }, [initialThresholds]);
 
@@ -94,13 +103,12 @@ export function QuizTierSettings({ initialThresholds, onSave, className = '' }: 
         [field]: value
       }
     };
-
-    setThresholds(newThresholds);
-    setIsDirty(true);
     
-    // Validate in real-time
     const newErrors = validateThresholds(newThresholds);
+    setThresholds(newThresholds);
     setErrors(newErrors);
+    setIsDirty(true);
+    setCurrentPreset('custom'); // Set to custom when manually editing
   };
 
   const handleSave = () => {
@@ -146,6 +154,7 @@ export function QuizTierSettings({ initialThresholds, onSave, className = '' }: 
     }
     
     setThresholds(newThresholds);
+    setCurrentPreset(preset);
     setIsDirty(true);
     setErrors({});
   };
@@ -162,25 +171,33 @@ export function QuizTierSettings({ initialThresholds, onSave, className = '' }: 
         <div className="flex gap-2 mb-4">
           <Button
             size="sm"
-            variant="outline"
+            variant={currentPreset === 'easy' ? 'primary' : 'outline'}
             onClick={() => handlePreset('easy')}
+            className={currentPreset === 'easy' ? 'bg-green-600 hover:bg-green-700' : ''}
           >
-            Easy Quiz
+            🟢 Easy Quiz
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant={currentPreset === 'normal' ? 'primary' : 'outline'}
             onClick={() => handlePreset('normal')}
+            className={currentPreset === 'normal' ? 'bg-blue-600 hover:bg-blue-700' : ''}
           >
-            Normal Quiz
+            🔵 Normal Quiz
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant={currentPreset === 'hard' ? 'primary' : 'outline'}
             onClick={() => handlePreset('hard')}
+            className={currentPreset === 'hard' ? 'bg-red-600 hover:bg-red-700' : ''}
           >
-            Hard Quiz
+            🔴 Hard Quiz
           </Button>
+          {currentPreset === 'custom' && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+              🎯 Custom Settings
+            </span>
+          )}
         </div>
       </div>
 

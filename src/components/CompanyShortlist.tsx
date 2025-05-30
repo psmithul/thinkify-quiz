@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type Recruiter = {
   id: string;
@@ -27,6 +28,7 @@ type Company = {
 
 interface CompanyShortlistProps {
   userTier: number;
+  quizId?: string;
 }
 
 const TIER_LABELS = {
@@ -37,47 +39,94 @@ const TIER_LABELS = {
   5: { label: 'Expert', color: 'bg-green-100 text-green-800', description: 'Lead/Principal positions' }
 };
 
-export function CompanyShortlist({ userTier }: CompanyShortlistProps) {
+export function CompanyShortlist({ userTier, quizId }: CompanyShortlistProps) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
 
   async function fetchCompanies() {
     try {
       setIsLoading(true);
+      setError(null);
       
-      // Fetch companies for the user's tier and below (they qualify for these positions)
-      const { data: companiesData, error: companiesError } = await supabase
-        .from('companies')
-        .select('*')
-        .lte('tier', userTier) // Less than or equal to user's tier
-        .order('tier', { ascending: false }) // Show highest tier first
-        .order('name', { ascending: true });
+      let companiesData: Company[] = [];
+      
+      if (quizId) {
+        // Fetch only companies associated with this specific quiz
+        console.log('Fetching companies associated with quiz:', quizId);
+        
+        const { data: associations, error: associationsError } = await supabase
+          .from('quiz_company_associations')
+          .select(`
+            company_id,
+            companies (
+              id,
+              name,
+              tier,
+              industry,
+              location,
+              website,
+              description,
+              logo_url
+            )
+          `)
+          .eq('quiz_id', quizId);
 
-      if (companiesError) throw companiesError;
+        if (associationsError) {
+          console.error('Error fetching quiz company associations:', associationsError);
+          throw new Error('Unable to load company opportunities for this quiz');
+        }
+
+        if (associations && associations.length > 0) {
+          // Filter companies based on user's eligibility tier
+          companiesData = associations
+            .filter((assoc: any) => assoc.companies && typeof assoc.companies === 'object')
+            .map((assoc: any) => assoc.companies as Company)
+            .filter((company: Company) => company && company.tier <= userTier);
+          
+          console.log('Found associated companies eligible for user tier:', companiesData.length, 'out of', associations.length, 'total associations');
+        } else {
+          console.log('No company associations found for this quiz');
+          companiesData = [];
+        }
+      } else {
+        // If no quiz ID provided, show no companies (this should not happen in results context)
+        console.log('No quiz ID provided - showing no companies');
+        companiesData = [];
+      }
 
       // Fetch recruiters for each company
-      const companiesWithRecruiters = await Promise.all(
-        (companiesData || []).map(async (company) => {
-          const { data: recruiters, error: recruitersError } = await supabase
-            .from('recruiters')
-            .select('id, name, linkedin_url, position, bio, profile_image_url')
-            .eq('company_id', company.id)
-            .eq('is_active', true);
+      if (companiesData.length > 0) {
+        const companiesWithRecruiters = await Promise.all(
+          companiesData.map(async (company) => {
+            try {
+              const { data: recruiters } = await supabase
+                .from('recruiters')
+                .select('*')
+                .eq('company_id', company.id)
+                .limit(3); // Limit to 3 recruiters per company
+              
+              return {
+                ...company,
+                recruiters: recruiters || []
+              };
+            } catch (error) {
+              console.warn('Error fetching recruiters for company:', company.id, error);
+              return {
+                ...company,
+                recruiters: []
+              };
+            }
+          })
+        );
+        
+        companiesData = companiesWithRecruiters;
+      }
 
-          if (recruitersError) {
-            console.warn(`Unable to fetch recruiters for ${company.name}:`, recruitersError);
-          }
-
-          return {
-            ...company,
-            recruiters: recruiters || []
-          };
-        })
-      );
-
-      setCompanies(companiesWithRecruiters);
+      setCompanies(companiesData);
     } catch (err) {
+      console.error('Error fetching companies:', err);
       setError(formatErrorMessage(err));
     } finally {
       setIsLoading(false);
@@ -86,17 +135,15 @@ export function CompanyShortlist({ userTier }: CompanyShortlistProps) {
 
   useEffect(() => {
     fetchCompanies();
-  }, [userTier]);
+  }, [userTier, quizId]);
 
   if (isLoading) {
     return (
-      <div className="bg-white shadow rounded-lg p-6 border border-gray-200">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
+      <div className="w-full">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading company opportunities...</p>
           </div>
         </div>
       </div>
@@ -105,9 +152,53 @@ export function CompanyShortlist({ userTier }: CompanyShortlistProps) {
 
   if (error) {
     return (
-      <div className="bg-white shadow rounded-lg p-6 border border-gray-200">
-        <div className="bg-red-50 p-4 rounded-md">
-          <p className="text-sm text-red-600">{error}</p>
+      <div className="w-full">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="w-12 h-12 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Companies</h3>
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={fetchCompanies}
+            className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!companies || companies.length === 0) {
+    return (
+      <div className="w-full">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
+          <div className="text-blue-600 mb-4">
+            <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H3m2 0h4M9 7h6m-6 4h6m-2 8h.01" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-blue-800 mb-2">No Company Opportunities Available</h3>
+          <p className="text-blue-700 mb-4">
+            {quizId 
+              ? "This quiz doesn't have any associated companies, or you may need a higher tier score to unlock opportunities." 
+              : `No companies are available for Tier ${userTier} and below.`
+            }
+          </p>
+          <div className="text-sm text-blue-600 space-y-2">
+            <p>💡 <strong>Tips to unlock more opportunities:</strong></p>
+            <ul className="list-disc list-inside text-left max-w-md mx-auto">
+              <li>Retake this quiz to improve your score</li>
+              <li>Take other quizzes to demonstrate broader skills</li>
+              <li>Companies may be added to this quiz in the future</li>
+            </ul>
+          </div>
         </div>
       </div>
     );
@@ -116,138 +207,240 @@ export function CompanyShortlist({ userTier }: CompanyShortlistProps) {
   const tierConfig = TIER_LABELS[userTier as keyof typeof TIER_LABELS];
 
   return (
-    <div className="bg-white shadow rounded-lg p-6 border border-gray-200">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Company Opportunities</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Based on your <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${tierConfig?.color}`}>
-              Tier {userTier}: {tierConfig?.label}
-            </span> performance
-          </p>
-        </div>
-        <div className="text-sm text-gray-500">
-          {companies.length} companies available
+    <div className="w-full space-y-6">
+      {/* Header Info */}
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Company Opportunities</h2>
+            <p className="text-gray-600 mt-1">
+              Based on your quiz performance, you're eligible for <strong>Tier {userTier}</strong> companies and below
+            </p>
+          </div>
+          <div className="text-center sm:text-right">
+            <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium ${tierConfig.color}`}>
+              🎯 {tierConfig.label} Level
+            </div>
+            <p className="text-xs text-gray-500 mt-1">{tierConfig.description}</p>
+          </div>
         </div>
       </div>
 
-      {companies.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-gray-400 mb-4">
-            <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H3m2 0h3M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <p className="text-gray-500">No companies available for your current tier.</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Complete more quizzes to improve your tier and unlock more opportunities!
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {companies.map((company) => (
-            <div key={company.id} className="border border-gray-200 rounded-lg p-4 hover:border-purple-300 transition-colors">
-              <div className="flex items-start space-x-4">
-                {company.logo_url && (
-                  <img
-                    src={company.logo_url}
-                    alt={`${company.name} logo`}
-                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                    }}
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900 truncate">{company.name}</h3>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      TIER_LABELS[company.tier as keyof typeof TIER_LABELS]?.color || 'bg-gray-100 text-gray-800'
-                    }`}>
-                      Tier {company.tier}
-                    </span>
+      {/* Companies Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <AnimatePresence>
+          {companies.map((company, index) => (
+            <motion.div
+              key={company.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow duration-300"
+            >
+              {/* Company Header */}
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center">
+                    {company.logo_url ? (
+                      <img
+                        src={company.logo_url}
+                        alt={`${company.name} logo`}
+                        className="w-12 h-12 rounded-lg object-cover mr-3"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                        <span className="text-lg font-bold text-gray-600">
+                          {company.name.charAt(0)}
+                        </span>
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
+                        {company.name}
+                      </h3>
+                      <p className="text-sm text-gray-500">{company.industry}</p>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {company.industry} • {company.location}
-                  </p>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    TIER_LABELS[company.tier as keyof typeof TIER_LABELS]?.color || 'bg-gray-100 text-gray-800'
+                  }`}>
+                    Tier {company.tier}
+                  </span>
+                </div>
+
+                {/* Company Details */}
+                <div className="space-y-3">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {company.location}
+                  </div>
+
                   {company.description && (
-                    <p className="text-sm text-gray-500 mt-2 line-clamp-2">{company.description}</p>
+                    <p className="text-sm text-gray-600 line-clamp-2">
+                      {company.description}
+                    </p>
                   )}
-                  
-                  {/* Recruiters Section */}
+
+                  {/* Recruiters */}
                   {company.recruiters && company.recruiters.length > 0 && (
-                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                      <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-                        <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Connect with Recruiters
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {company.recruiters.map((recruiter) => (
-                          <a
-                            key={recruiter.id}
-                            href={recruiter.linkedin_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors duration-200 shadow-sm group"
-                            onClick={(e) => e.stopPropagation()}
-                            title={recruiter.bio || `${recruiter.position || 'Recruiter'} at ${company.name}`}
-                          >
-                            <svg className="h-4 w-4 mr-1.5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                            </svg>
-                            {recruiter.name}
-                            {recruiter.position && (
-                              <span className="text-xs text-blue-200 ml-1">({recruiter.position})</span>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 mb-2">Recruiters</h4>
+                      <div className="space-y-2">
+                        {company.recruiters.slice(0, 2).map((recruiter) => (
+                          <div key={recruiter.id} className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              {recruiter.profile_image_url ? (
+                                <img
+                                  src={recruiter.profile_image_url}
+                                  alt={recruiter.name}
+                                  className="w-8 h-8 rounded-full mr-2"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-2">
+                                  <span className="text-xs font-medium text-purple-800">
+                                    {recruiter.name.charAt(0)}
+                                  </span>
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{recruiter.name}</p>
+                                {recruiter.position && (
+                                  <p className="text-xs text-gray-500">{recruiter.position}</p>
+                                )}
+                              </div>
+                            </div>
+                            {recruiter.linkedin_url && (
+                              <a
+                                href={recruiter.linkedin_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                LinkedIn
+                              </a>
                             )}
-                          </a>
+                          </div>
                         ))}
+                        {company.recruiters.length > 2 && (
+                          <p className="text-xs text-gray-500">
+                            +{company.recruiters.length - 2} more recruiter{company.recruiters.length - 2 > 1 ? 's' : ''}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
-                  
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="text-xs text-gray-500">
-                      {TIER_LABELS[company.tier as keyof typeof TIER_LABELS]?.description}
-                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex gap-2">
                     {company.website && (
                       <a
                         href={company.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center px-3 py-1 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors"
+                        className="flex-1 bg-purple-600 text-white text-center py-2 px-4 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
                       >
-                        View Jobs
-                        <svg className="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
+                        🌐 Visit Website
                       </a>
                     )}
+                    <button
+                      onClick={() => setSelectedCompany(selectedCompany === company.id ? null : company.id)}
+                      className="flex-1 bg-gray-100 text-gray-700 text-center py-2 px-4 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      {selectedCompany === company.id ? 'Hide Details' : 'View Details'}
+                    </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
-      <div className="mt-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
-        <div className="flex items-start space-x-3">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-medium text-purple-900">How it works</h4>
-            <p className="text-sm text-purple-700 mt-1">
-              Companies are categorized by tiers based on position levels. Your quiz performance determines which tiers you qualify for. 
-              Higher scores unlock access to more senior positions at top-tier companies. Connect with recruiters on LinkedIn to explore opportunities!
-            </p>
-          </div>
-        </div>
+                {/* Expanded Details */}
+                <AnimatePresence>
+                  {selectedCompany === company.id && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-4 pt-4 border-t border-gray-100"
+                    >
+                      <div className="space-y-3">
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-900 mb-1">Why you're eligible</h5>
+                          <p className="text-xs text-gray-600">
+                            Your Tier {userTier} performance qualifies you for this Tier {company.tier} company. 
+                            {company.tier < userTier && " You exceed their minimum requirements!"}
+                          </p>
+                        </div>
+                        
+                        {company.recruiters && company.recruiters.length > 0 && (
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900 mb-2">All Recruiters</h5>
+                            <div className="space-y-2">
+                              {company.recruiters.map((recruiter) => (
+                                <div key={recruiter.id} className="bg-gray-50 rounded-lg p-3">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-center">
+                                      {recruiter.profile_image_url ? (
+                                        <img
+                                          src={recruiter.profile_image_url}
+                                          alt={recruiter.name}
+                                          className="w-10 h-10 rounded-full mr-3"
+                                        />
+                                      ) : (
+                                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                                          <span className="text-sm font-medium text-purple-800">
+                                            {recruiter.name.charAt(0)}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-900">{recruiter.name}</p>
+                                        {recruiter.position && (
+                                          <p className="text-xs text-gray-500">{recruiter.position}</p>
+                                        )}
+                                        {recruiter.bio && (
+                                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">{recruiter.bio}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {recruiter.linkedin_url && (
+                                      <a
+                                        href={recruiter.linkedin_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="bg-blue-600 text-white py-1 px-3 rounded text-xs hover:bg-blue-700 transition-colors"
+                                      >
+                                        Connect
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Footer Message */}
+      <div className="bg-gray-50 rounded-lg p-6 text-center">
+        <p className="text-gray-600 text-sm">
+          🎯 <strong>Showing {companies.length} company opportunit{companies.length === 1 ? 'y' : 'ies'}</strong> 
+          {quizId && ' associated with this quiz'} that match your performance level.
+        </p>
+        <p className="text-gray-500 text-xs mt-2">
+          Take more quizzes or improve your scores to unlock additional opportunities!
+        </p>
       </div>
     </div>
   );

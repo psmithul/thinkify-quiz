@@ -499,8 +499,7 @@ export default function CreatorDashboard() {
                       <motion.div
                         key={quiz.id}
                         whileHover={{ y: -4 }}
-                        className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200 cursor-pointer"
-                        onClick={() => router.push(`/creator/quiz/${quiz.id}/edit`)}
+                        className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200"
                       >
                         <div className="flex items-start justify-between mb-4">
                           <div className="text-3xl">🧠</div>
@@ -516,9 +515,26 @@ export default function CreatorDashboard() {
                         <p className="text-sm text-gray-600 mb-4 line-clamp-2">
                           {quiz.description || 'No description available'}
                         </p>
-                        <div className="flex items-center justify-between text-sm text-gray-500">
+                        <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
                           <span>Created {new Date(quiz.created_at).toLocaleDateString()}</span>
                           <span className="text-purple-600 font-medium">Quiz</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={() => router.push(`/creator/quiz/${quiz.id}/edit`)}
+                            size="sm"
+                            className="flex-1 sm:flex-initial bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+                          >
+                            ✏️ Edit Quiz
+                          </Button>
+                          <Button
+                            onClick={() => router.push(`/user/quiz/${quiz.id}`)}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 sm:flex-initial border-gray-300 text-gray-700"
+                          >
+                            👁️ Preview
+                          </Button>
                         </div>
                       </motion.div>
                     ))}

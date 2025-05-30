@@ -35,6 +35,8 @@ type Quiz = {
   created_at: string;
   creator_id?: string;
   time_limit_minutes?: number;
+  tier_thresholds?: any;
+  category?: string;
   creator?: {
     id: string;
     full_name?: string;
@@ -59,7 +61,7 @@ export const eligibilityTiers: EligibilityTier[] = [
     label: "Beginner",
     minScore: 0,
     color: "red",
-    bgClass: "bg-red-200",
+    bgClass: "bg-red-100",
     borderClass: "border-red-500",
     textClass: "text-red-900",
     description: "Not yet qualified. Additional training recommended."
@@ -69,7 +71,7 @@ export const eligibilityTiers: EligibilityTier[] = [
     label: "Basic",
     minScore: 40,
     color: "orange",
-    bgClass: "bg-orange-200",
+    bgClass: "bg-orange-100",
     borderClass: "border-orange-500",
     textClass: "text-orange-900",
     description: "Basic understanding. Further improvement needed."
@@ -79,7 +81,7 @@ export const eligibilityTiers: EligibilityTier[] = [
     label: "Intermediate",
     minScore: 60,
     color: "yellow",
-    bgClass: "bg-yellow-200",
+    bgClass: "bg-yellow-100",
     borderClass: "border-yellow-600",
     textClass: "text-yellow-900",
     description: "Satisfactory performance. Eligible for certification."
@@ -89,7 +91,7 @@ export const eligibilityTiers: EligibilityTier[] = [
     label: "Proficient",
     minScore: 75,
     color: "lime",
-    bgClass: "bg-lime-200",
+    bgClass: "bg-lime-100",
     borderClass: "border-lime-600",
     textClass: "text-lime-900",
     description: "Strong proficiency demonstrated. Well qualified."
@@ -99,21 +101,84 @@ export const eligibilityTiers: EligibilityTier[] = [
     label: "Expert",
     minScore: 90,
     color: "green",
-    bgClass: "bg-green-200",
+    bgClass: "bg-green-100",
     borderClass: "border-green-600",
     textClass: "text-green-900",
     description: "Expert level knowledge. Highly qualified."
   }
 ];
 
-export function getEligibilityTier(score: number): EligibilityTier {
-  // Find the highest tier the score qualifies for
-  for (let i = eligibilityTiers.length - 1; i >= 0; i--) {
-    if (score >= eligibilityTiers[i].minScore) {
-      return eligibilityTiers[i];
+export function getEligibilityTier(score: number, customThresholds?: any): EligibilityTier {
+  let thresholds = eligibilityTiers;
+  
+  // If custom thresholds are provided, use them
+  if (customThresholds && typeof customThresholds === 'object') {
+    try {
+      thresholds = [
+        {
+          tier: 1,
+          label: "Beginner",
+          minScore: 0,
+          color: "red",
+          bgClass: "bg-red-100",
+          borderClass: "border-red-500",
+          textClass: "text-red-900",
+          description: "Not yet qualified. Additional training recommended."
+        },
+        {
+          tier: 2,
+          label: "Basic",
+          minScore: customThresholds.tier_2 || 40,
+          color: "orange",
+          bgClass: "bg-orange-100",
+          borderClass: "border-orange-500",
+          textClass: "text-orange-900",
+          description: "Basic understanding. Further improvement needed."
+        },
+        {
+          tier: 3,
+          label: "Intermediate",
+          minScore: customThresholds.tier_3 || 60,
+          color: "yellow",
+          bgClass: "bg-yellow-100",
+          borderClass: "border-yellow-600",
+          textClass: "text-yellow-900",
+          description: "Satisfactory performance. Eligible for certification."
+        },
+        {
+          tier: 4,
+          label: "Proficient",
+          minScore: customThresholds.tier_4 || 75,
+          color: "lime",
+          bgClass: "bg-lime-100",
+          borderClass: "border-lime-600",
+          textClass: "text-lime-900",
+          description: "Strong proficiency demonstrated. Well qualified."
+        },
+        {
+          tier: 5,
+          label: "Expert",
+          minScore: customThresholds.tier_5 || 90,
+          color: "green",
+          bgClass: "bg-green-100",
+          borderClass: "border-green-600",
+          textClass: "text-green-900",
+          description: "Expert level knowledge. Highly qualified."
+        }
+      ];
+    } catch (error) {
+      console.warn('Error parsing custom thresholds, using defaults:', error);
     }
   }
-  return eligibilityTiers[0]; // Default to lowest tier
+  
+  // Find the highest tier the score qualifies for
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (score >= thresholds[i].minScore) {
+      return thresholds[i];
+    }
+  }
+  
+  return thresholds[0]; // Default to lowest tier
 }
 
 export default function QuizClient({
@@ -291,7 +356,7 @@ export default function QuizClient({
           // User has already completed this quiz
           setScore(attemptData.score);
           setResultId(attemptData.id);
-          setEligibilityTier(getEligibilityTier(attemptData.score));
+          setEligibilityTier(getEligibilityTier(attemptData.score, quizData?.tier_thresholds));
           setSuccess('You have already completed this quiz!');
         }
       } catch (err) {
@@ -394,9 +459,10 @@ export default function QuizClient({
       }
       
       const finalScore = totalPoints > 0 ? Math.round((correctAnswers / totalPoints) * 100) : 0;
-      const tier = getEligibilityTier(finalScore);
       
-      // Calculate time taken
+      // Calculate the final tier using custom thresholds if available
+      const tier = getEligibilityTier(finalScore, quiz?.tier_thresholds);
+      
       const endTime = new Date();
       const timeTakenSeconds = quizStartTime ? Math.round((endTime.getTime() - quizStartTime.getTime()) / 1000) : null;
       

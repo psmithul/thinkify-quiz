@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase, User } from './supabaseClient';
 import { useRouter } from 'next/navigation';
+import { ProfileCompletionGuard } from '@/components/ProfileCompletionGuard';
 
 type AuthContextType = {
   session: Session | null;
@@ -64,17 +65,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isLoading && userData && typeof window !== 'undefined') {
       const path = window.location.pathname;
       
-      // Redirect if user is on a page they shouldn't access
+      // Skip redirects for auth, quiz-taking, and certificate pages
+      if (path.startsWith('/auth') || 
+          path.includes('/quiz/') || 
+          path.includes('/certificate/') ||
+          path === '/' ||
+          path === '/about' ||
+          path === '/pricing') {
+        return;
+      }
+      
+      // Redirect based on user role
       if (userData.role === 'user') {
+        // Users can only access user routes
         if (path.startsWith('/admin') || path.startsWith('/creator')) {
+          console.log('Redirecting user away from restricted area');
           router.push('/user/dashboard');
         }
       } else if (userData.role === 'creator') {
+        // Creators automatically go to creator dashboard
+        if (path.startsWith('/user/dashboard') && !path.includes('/quiz/')) {
+          console.log('Redirecting creator to creator dashboard');
+          router.push('/creator/dashboard');
+        }
+        // Creators can't access admin routes
         if (path.startsWith('/admin')) {
+          console.log('Redirecting creator away from admin area');
           router.push('/creator/dashboard');
         }
       } else if (userData.role === 'admin') {
-        // Admin can access all pages
+        // Admin can access everything, but default to admin dashboard
+        if (path === '/user/dashboard' || path === '/creator/dashboard') {
+          console.log('Redirecting admin to admin dashboard');
+          router.push('/admin/dashboard');
+        }
       }
     }
   }, [isLoading, userData, router]);
@@ -227,7 +251,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <ProfileCompletionGuard>
+        {children}
+      </ProfileCompletionGuard>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

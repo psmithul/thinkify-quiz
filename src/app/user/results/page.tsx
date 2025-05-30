@@ -77,7 +77,9 @@ export default function UserResults() {
   }, [user]);
 
   const getEligibilityTierForResult = (result: Result): EligibilityTier => {
-    // Always calculate from score since eligibility_tier is not stored in database
+    // Try to get custom thresholds from the quiz if available
+    // Since we don't have quiz data here, we'll use default tiers for now
+    // In a real implementation, you might want to fetch quiz data or store tier_thresholds in results
     return getEligibilityTier(result.score);
   };
 
@@ -117,6 +119,7 @@ export default function UserResults() {
 
           <CompanyShortlist 
             userTier={getEligibilityTierForResult(selectedResult).tier}
+            quizId={selectedResult.quiz_id}
           />
         </div>
       </Layout>
@@ -150,81 +153,160 @@ export default function UserResults() {
             </p>
           </div>
         ) : (
-          <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quiz</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Completed</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Eligibility</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+          <div className="bg-white shadow rounded-lg border border-gray-200">
+            {/* Mobile Card View */}
+            <div className="block md:hidden">
+              <div className="space-y-4 p-4">
                 {results.map((result) => {
                   const eligibilityTier = getEligibilityTierForResult(result);
                   return (
-                    <motion.tr 
+                    <motion.div
                       key={result.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gray-50 p-4 rounded-lg border border-gray-200"
                     >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {result.quiz?.title || 'Unknown Quiz'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(result.completed_at).toLocaleDateString()} {new Date(result.completed_at).toLocaleTimeString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm font-medium rounded-full px-2 py-1 inline-block
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="font-medium text-gray-900 text-sm">
+                          {result.quiz?.title || 'Unknown Quiz'}
+                        </h3>
+                        <div className={`text-xs font-medium rounded-full px-2 py-1
                           ${result.score >= 80 ? 'bg-green-100 text-green-800' : 
                            result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
                            'bg-red-100 text-red-800'}`}>
                           {result.score.toFixed(1)}%
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm font-bold rounded-full px-3 py-2 inline-block ${eligibilityTier.bgClass} ${eligibilityTier.textClass} border ${eligibilityTier.borderClass}`}>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 mb-2">
+                        {new Date(result.completed_at).toLocaleDateString()}
+                      </div>
+                      
+                      <div className="mb-3">
+                        <div className={`text-xs font-bold rounded-full px-2 py-1 inline-block ${eligibilityTier.bgClass} ${eligibilityTier.textClass} border ${eligibilityTier.borderClass}`}>
                           {eligibilityTier.label} (Tier {eligibilityTier.tier})
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            className="text-indigo-600 hover:text-indigo-900"
-                            onClick={() => router.push(`/user/results/${result.id}`)}
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/user/results/${result.id}`)}
+                          className="text-xs"
+                        >
+                          📊 Details
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleShowCompanyOpportunities(result)}
+                          className="text-xs"
+                        >
+                          🏢 Companies
+                        </Button>
+                        {eligibilityTier.tier >= 3 && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => router.push(`/user/certificate/${result.id}`)}
+                            className="text-xs bg-green-600 hover:bg-green-700"
                           >
-                            View Details
-                          </button>
-                          <button
-                            className="text-purple-600 hover:text-purple-900"
-                            onClick={() => router.push(`/user/quiz/${result.quiz_id}`)}
-                          >
-                            View Quiz
-                          </button>
-                          <button
-                            className="text-blue-600 hover:text-blue-900"
-                            onClick={() => handleShowCompanyOpportunities(result)}
-                          >
-                            Company Opportunities
-                          </button>
-                          {eligibilityTier.tier >= 3 && (
-                            <button
-                              className="text-green-600 hover:text-green-900"
-                              onClick={() => router.push(`/user/certificate/${result.id}`)}
-                            >
-                              Certificate
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
+                            🏆 Certificate
+                          </Button>
+                        )}
+                      </div>
+                    </motion.div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quiz</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Completed</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Eligibility</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {results.map((result) => {
+                    const eligibilityTier = getEligibilityTierForResult(result);
+                    return (
+                      <motion.tr 
+                        key={result.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {result.quiz?.title || 'Unknown Quiz'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(result.completed_at).toLocaleDateString()} {new Date(result.completed_at).toLocaleTimeString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm font-medium rounded-full px-2 py-1 inline-block
+                            ${result.score >= 80 ? 'bg-green-100 text-green-800' : 
+                             result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                             'bg-red-100 text-red-800'}`}>
+                            {result.score.toFixed(1)}%
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm font-bold rounded-full px-3 py-2 inline-block ${eligibilityTier.bgClass} ${eligibilityTier.textClass} border ${eligibilityTier.borderClass}`}>
+                            {eligibilityTier.label} (Tier {eligibilityTier.tier})
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex justify-end items-center gap-2 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push(`/user/results/${result.id}`)}
+                              className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300"
+                            >
+                              📊 View Details
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push(`/user/quiz/${result.quiz_id}`)}
+                              className="text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
+                            >
+                              🧠 View Quiz
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleShowCompanyOpportunities(result)}
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
+                            >
+                              🏢 Company Opportunities
+                            </Button>
+                            {eligibilityTier.tier >= 3 && (
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => router.push(`/user/certificate/${result.id}`)}
+                                className="bg-green-600 hover:bg-green-700 border-green-600"
+                              >
+                                🏆 Certificate
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

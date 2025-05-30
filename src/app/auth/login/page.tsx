@@ -21,7 +21,13 @@ export default function LoginPage() {
   // Redirect authenticated users away from login page
   useEffect(() => {
     if (!isLoading && user && userData) {
-      console.log('User is already authenticated, redirecting based on role:', userData.role);
+      console.log('User is already authenticated, checking profile completion:', userData);
+      
+      // Check if user has a full name, if not redirect to complete profile
+      if (!userData.full_name || userData.full_name.trim() === '') {
+        router.push('/user/complete-profile');
+        return;
+      }
       
       if (userData.role === 'admin') {
         router.push('/admin/dashboard');
@@ -40,6 +46,16 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
+      // Check user profile completeness after successful sign in
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('full_name, role')
+        .eq('email', email)
+        .single();
+      
+      if (userProfile && (!userProfile.full_name || userProfile.full_name.trim() === '')) {
+        router.push('/user/complete-profile');
+      }
       // Don't manually redirect here - let the useEffect handle it
     } catch (err) {
       setError(formatErrorMessage(err));
