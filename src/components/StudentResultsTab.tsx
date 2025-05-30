@@ -86,24 +86,17 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
-    
     try {
       const date = new Date(dateString);
-      
-      // Check if date is valid
       if (isNaN(date.getTime())) {
         return 'Invalid date';
       }
-      
-      // Format the date in a more reliable way
       return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'local'
+        minute: '2-digit'
       }).format(date);
     } catch (error) {
       console.error('Date formatting error:', error);
@@ -112,11 +105,18 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
   };
 
   const getDisplayPercentage = (score: number) => {
+    // Handle both decimal (0.67) and percentage (67) formats
+    if (score <= 1) {
+      // Score is stored as decimal (0.67 = 67%)
+      return Math.round(score * 100);
+    }
+    // Score is already a percentage
     return Math.round(score);
   };
 
   const getRawPoints = (score: number, maxScore: number) => {
-    return Math.round((score / 100) * maxScore);
+    const percentage = getDisplayPercentage(score);
+    return Math.round((percentage / 100) * maxScore);
   };
 
   const getDetailedStats = () => {
@@ -330,6 +330,7 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
                     const percentage = getDisplayPercentage(result.score);
                     const rawPoints = getRawPoints(result.score, result.max_score);
                     const tier = getEligibilityTier(percentage, quizDetails?.tier_thresholds);
+                    
                     return (
                       <tr key={result.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -396,6 +397,7 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
                 const percentage = getDisplayPercentage(result.score);
                 const rawPoints = getRawPoints(result.score, result.max_score);
                 const tier = getEligibilityTier(percentage, quizDetails?.tier_thresholds);
+                
                 return (
                   <motion.div
                     key={result.id}
