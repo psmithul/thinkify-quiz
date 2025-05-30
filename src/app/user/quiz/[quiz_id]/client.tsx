@@ -118,7 +118,7 @@ export function getEligibilityTier(score: number, customThresholds?: any): Eligi
         {
           tier: 1,
           label: "Beginner",
-          minScore: 0,
+          minScore: 0, // Always starts at 0
           color: "red",
           bgClass: "bg-red-100",
           borderClass: "border-red-500",
@@ -128,7 +128,7 @@ export function getEligibilityTier(score: number, customThresholds?: any): Eligi
         {
           tier: 2,
           label: "Basic",
-          minScore: customThresholds.tier_2 || 40,
+          minScore: customThresholds.tier_2?.min_score || 40,
           color: "orange",
           bgClass: "bg-orange-100",
           borderClass: "border-orange-500",
@@ -138,7 +138,7 @@ export function getEligibilityTier(score: number, customThresholds?: any): Eligi
         {
           tier: 3,
           label: "Intermediate",
-          minScore: customThresholds.tier_3 || 60,
+          minScore: customThresholds.tier_3?.min_score || 60,
           color: "yellow",
           bgClass: "bg-yellow-100",
           borderClass: "border-yellow-600",
@@ -148,7 +148,7 @@ export function getEligibilityTier(score: number, customThresholds?: any): Eligi
         {
           tier: 4,
           label: "Proficient",
-          minScore: customThresholds.tier_4 || 75,
+          minScore: customThresholds.tier_4?.min_score || 75,
           color: "lime",
           bgClass: "bg-lime-100",
           borderClass: "border-lime-600",
@@ -158,7 +158,7 @@ export function getEligibilityTier(score: number, customThresholds?: any): Eligi
         {
           tier: 5,
           label: "Expert",
-          minScore: customThresholds.tier_5 || 90,
+          minScore: customThresholds.tier_5?.min_score || 90,
           color: "green",
           bgClass: "bg-green-100",
           borderClass: "border-green-600",
@@ -167,7 +167,7 @@ export function getEligibilityTier(score: number, customThresholds?: any): Eligi
         }
       ];
     } catch (error) {
-      console.warn('Error parsing custom thresholds, using defaults:', error);
+      // Silently fall back to defaults in production
     }
   }
   
