@@ -248,7 +248,6 @@ export default function QuizClient({
   // Timer completion handler
   const handleTimeUp = useCallback(async () => {
     if (!isSubmitting && isQuizStarted) {
-      console.log('Timer expired, auto-submitting quiz...');
       await handleSubmitQuiz(true); // Pass true to indicate auto-submission
     }
   }, [isSubmitting, isQuizStarted]);
@@ -258,8 +257,6 @@ export default function QuizClient({
       if (!user) return;
 
       try {
-        console.log('Fetching quiz with ID:', quizId);
-        
         // Fetch quiz details
         const { data: quizData, error: quizError } = await supabase
           .from('quizzes')
@@ -268,11 +265,8 @@ export default function QuizClient({
           .single();
 
         if (quizError) {
-          console.error('Error fetching quiz:', quizError);
           throw quizError;
         }
-        
-        console.log('Quiz data loaded:', quizData);
         
         // If quiz has a creator_id, fetch creator info separately
         let creatorInfo = null;
@@ -302,11 +296,8 @@ export default function QuizClient({
           .order('position');
 
         if (questionsError) {
-          console.error('Error fetching questions:', questionsError);
           throw questionsError;
         }
-        
-        console.log('Questions loaded:', questionsData?.length || 0);
         
         // Fetch options for multiple choice questions
         let questionsWithOptions = [...(questionsData || [])];
@@ -321,10 +312,8 @@ export default function QuizClient({
             .order('position');
             
           if (optionsError) {
-            console.error('Error fetching options:', optionsError);
+            // Non-critical error, continue without options
           } else if (optionsData) {
-            console.log('Options loaded:', optionsData.length);
-            
             // Group options by question_id
             const optionsByQuestion = optionsData.reduce((acc, option) => {
               if (!acc[option.question_id]) {
@@ -412,14 +401,11 @@ export default function QuizClient({
         .single();
         
       if (attemptError) {
-        console.error('Error creating quiz attempt:', attemptError);
         throw attemptError;
       }
       
       setAttemptId(attemptData.id);
-      console.log('Quiz started, attempt ID:', attemptData.id);
     } catch (err) {
-      console.error('Error starting quiz:', err);
       setError(formatErrorMessage(err));
     }
   };

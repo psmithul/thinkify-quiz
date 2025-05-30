@@ -33,25 +33,17 @@ export default function CreatorDashboard() {
   const [activeTab, setActiveTab] = useState<'overview'|'quizzes'|'courses'|'analytics'|'profile'>('overview');
   
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        console.log('No user found, redirecting to login');
-        router.push('/auth/login');
-      } else if (!isCreator && !isAdmin) {
-        console.log('User is not a creator or admin, redirecting to user dashboard');
-        router.push('/user/dashboard');
-      } else {
-        console.log('User is authorized as creator/admin:', userData);
-      }
-    }
-  }, [authLoading, user, userData, isCreator, isAdmin, router]);
+    async function checkAndFetchData() {
+      if (!user || !userData) return;
 
-  useEffect(() => {
-    async function fetchCreatorData() {
-      if (!user) return;
+      // Only allow creators and admins
+      if (userData.role !== 'creator' && userData.role !== 'admin') {
+        router.push('/user/dashboard');
+        return;
+      }
 
       try {
-        console.log('Fetching creator data for user:', user.id);
+        setIsLoading(true);
         
         // Fetch creator profile
         const { data: profileData, error: profileError } = await supabase
@@ -59,31 +51,33 @@ export default function CreatorDashboard() {
           .select('*')
           .eq('id', user.id)
           .single();
-        
+
         if (profileError) {
-          console.error('Error fetching profile:', profileError);
+          if (profileError.code === 'PGRST116') {
+            // User doesn't exist, redirect to complete profile
+            router.push('/user/complete-profile');
+            return;
+          }
           throw profileError;
         }
-        
-        console.log('Creator profile loaded:', profileData);
+
         setCreatorProfile(profileData);
-        
-        // Fetch quizzes
+
+        // Fetch user's quizzes
         const { data: quizzesData, error: quizzesError } = await supabase
-              .from('quizzes')
-              .select('*')
-              .eq('creator_id', user.id)
-              .order('created_at', { ascending: false });
+          .from('quizzes')
+          .select('*')
+          .eq('creator_id', user.id)
+          .order('created_at', { ascending: false });
 
-            if (quizzesError) {
-              console.error('Error fetching quizzes:', quizzesError);
-              setQuizzes([]);
-            } else {
-              console.log('Quizzes loaded:', quizzesData?.length || 0);
-              setQuizzes(quizzesData || []);
-            }
+        if (quizzesError) {
+          // Non-fatal error, continue without quizzes
+          setQuizzes([]);
+        } else {
+          setQuizzes(quizzesData || []);
+        }
 
-        // Fetch courses
+        // Fetch user's courses
         const { data: coursesData, error: coursesError } = await supabase
           .from('courses')
           .select('*')
@@ -91,13 +85,12 @@ export default function CreatorDashboard() {
           .order('created_at', { ascending: false });
 
         if (coursesError) {
-          console.error('Error fetching courses:', coursesError);
+          // Non-fatal error, continue without courses
           setCourses([]);
         } else {
-          console.log('Courses loaded:', coursesData?.length || 0);
           setCourses(coursesData || []);
         }
-        
+
         // Calculate stats
         const totalQuizzes = quizzesData?.length || 0;
         const totalCourses = coursesData?.length || 0;
@@ -148,12 +141,8 @@ export default function CreatorDashboard() {
       }
     }
 
-    if (!authLoading && user && (isCreator || isAdmin)) {
-      fetchCreatorData();
-    } else if (!authLoading) {
-      setIsLoading(false);
-    }
-  }, [authLoading, user, isCreator, isAdmin]);
+    checkAndFetchData();
+  }, [user, userData, router]);
 
   if (authLoading || isLoading) {
     return (
