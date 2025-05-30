@@ -21,6 +21,7 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
   const [error, setError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState({
     full_name: '',
+    phone: '',
     date_of_birth: '',
     address: '',
     bio: ''
@@ -34,30 +35,60 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
       }
 
       try {
+        // First, try to select only the fields we know exist (full_name, bio) to avoid 400 errors
         const { data, error } = await supabase
           .from('users')
-          .select('full_name, date_of_birth, address, bio')
+          .select('full_name, bio, phone, date_of_birth, address')
           .eq('id', user.id)
           .single();
 
-        if (error) throw error;
-
-        // Check if essential profile fields are filled
-        const requiredFields: (keyof typeof profileData)[] = ['full_name'];
-        const isComplete = requiredFields.every(field => 
-          data?.[field] && data[field].trim().length > 0
-        );
-
-        if (isComplete) {
-          setIsProfileComplete(true);
+        if (error) {
+          // If we get a column error, try with just the basic fields
+          if (error.code === '42703') {
+            const { data: basicData, error: basicError } = await supabase
+              .from('users')
+              .select('full_name, bio')
+              .eq('id', user.id)
+              .single();
+            
+            if (basicError) throw basicError;
+            
+            // Use only the basic data we could retrieve
+            const profileExists = basicData?.full_name && basicData.full_name.trim().length > 0;
+            
+            if (profileExists) {
+              setIsProfileComplete(true);
+            } else {
+              setProfileData({
+                full_name: basicData?.full_name || '',
+                phone: '',
+                date_of_birth: '',
+                address: '',
+                bio: basicData?.bio || ''
+              });
+            }
+          } else {
+            throw error;
+          }
         } else {
-          // Pre-fill form with existing data
-          setProfileData({
-            full_name: data?.full_name || '',
-            date_of_birth: data?.date_of_birth || '',
-            address: data?.address || '',
-            bio: data?.bio || ''
-          });
+          // Check if essential profile fields are filled
+          const requiredFields: (keyof typeof profileData)[] = ['full_name'];
+          const isComplete = requiredFields.every(field => 
+            data?.[field] && data[field].trim().length > 0
+          );
+
+          if (isComplete) {
+            setIsProfileComplete(true);
+          } else {
+            // Pre-fill form with existing data
+            setProfileData({
+              full_name: data?.full_name || '',
+              phone: data?.phone || '',
+              date_of_birth: data?.date_of_birth || '',
+              address: data?.address || '',
+              bio: data?.bio || ''
+            });
+          }
         }
       } catch (err) {
         // If there's an error checking the profile, allow access
@@ -83,16 +114,27 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
         throw new Error('Full name is required');
       }
 
-      // Update profile
+      // Update profile with only the fields that we can be sure exist
+      const updateData: any = {
+        full_name: profileData.full_name.trim(),
+        bio: profileData.bio.trim() || null,
+        profile_completed_at: new Date().toISOString()
+      };
+
+      // Try to include additional fields if they exist
+      if (profileData.phone.trim()) {
+        updateData.phone = profileData.phone.trim();
+      }
+      if (profileData.date_of_birth) {
+        updateData.date_of_birth = profileData.date_of_birth;
+      }
+      if (profileData.address.trim()) {
+        updateData.address = profileData.address.trim();
+      }
+
       const { error } = await supabase
         .from('users')
-        .update({
-          full_name: profileData.full_name.trim(),
-          date_of_birth: profileData.date_of_birth || null,
-          address: profileData.address.trim() || null,
-          bio: profileData.bio.trim() || null,
-          profile_completed_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', user.id);
 
       if (error) throw error;
@@ -175,6 +217,21 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
                   onChange={(e) => setProfileData(prev => ({ ...prev, full_name: e.target.value }))}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder-gray-500"
                   placeholder="Enter your full name"
+                />
+              </div>
+
+              {/* Phone - Optional but recommended */}
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number <span className="text-gray-400">(Optional)</span>
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  value={profileData.phone}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder-gray-500"
+                  placeholder="Enter your phone number"
                 />
               </div>
 
