@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import { motion } from 'framer-motion';
@@ -27,53 +28,53 @@ interface StudentResultsTabProps {
   quizId: string;
 }
 
-export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
+export const StudentResultsTab = React.memo(function StudentResultsTab({ quizId }: StudentResultsTabProps) {
   const [results, setResults] = useState<StudentResult[]>([]);
   const [quizDetails, setQuizDetails] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<StudentResult | null>(null);
 
-  useEffect(() => {
-    async function fetchStudentResults() {
-      try {
-        setIsLoading(true);
-        setError(null);
+  const fetchStudentResults = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-        // Fetch quiz details first
-        const { data: quiz, error: quizError } = await supabase
-          .from('quizzes')
-          .select('*')
-          .eq('id', quizId)
-          .single();
+      // Fetch quiz details first
+      const { data: quiz, error: quizError } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('id', quizId)
+        .single();
 
-        if (quizError) throw quizError;
-        setQuizDetails(quiz);
+      if (quizError) throw quizError;
+      setQuizDetails(quiz);
 
-        // Fetch all quiz attempts (both completed and incomplete for better insights)
-        const { data, error: fetchError } = await supabase
-          .from('quiz_attempts')
-          .select(`
-            *,
-            user:users(id, email, full_name)
-          `)
-          .eq('quiz_id', quizId)
-          .order('completed_at', { ascending: false });
+      // Fetch all quiz attempts (both completed and incomplete for better insights)
+      const { data, error: fetchError } = await supabase
+        .from('quiz_attempts')
+        .select(`
+          *,
+          user:users(id, email, full_name)
+        `)
+        .eq('quiz_id', quizId)
+        .order('completed_at', { ascending: false });
 
-        if (fetchError) throw fetchError;
+      if (fetchError) throw fetchError;
 
-        setResults(data || []);
-      } catch (err) {
-        setError(formatErrorMessage(err));
-      } finally {
-        setIsLoading(false);
-      }
+      setResults(data || []);
+    } catch (err) {
+      setError(formatErrorMessage(err));
+    } finally {
+      setIsLoading(false);
     }
-
-    fetchStudentResults();
   }, [quizId]);
 
-  const formatDuration = (seconds: number | null) => {
+  useEffect(() => {
+    fetchStudentResults();
+  }, [fetchStudentResults]);
+
+  const formatDuration = useCallback((seconds: number | null) => {
     if (!seconds) return 'N/A';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -83,27 +84,34 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
       return `${hours}h ${minutes}m ${remainingSeconds}s`;
     }
     return `${minutes}m ${remainingSeconds}s`;
-  };
+  }, []);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     try {
+      if (!dateString) return 'Invalid date';
+      
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         return 'Invalid date';
       }
-      return new Intl.DateTimeFormat('en-US', {
+      
+      // Use simple date formatting without timezone parameters
+      return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric',
+        day: 'numeric'
+      }) + ' ' + date.toLocaleTimeString('en-US', {
         hour: '2-digit',
-        minute: '2-digit'
-      }).format(date);
+        minute: '2-digit',
+        hour12: true
+      });
     } catch (error) {
+      // Silent error handling to prevent console pollution
       return 'Invalid date';
     }
-  };
+  }, []);
 
-  const getDisplayPercentage = (score: number) => {
+  const getDisplayPercentage = useCallback((score: number) => {
     // Handle both decimal (0.67) and percentage (67) formats
     if (score <= 1) {
       // Score is stored as decimal (0.67 = 67%)
@@ -111,14 +119,14 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
     }
     // Score is already a percentage
     return Math.round(score);
-  };
+  }, []);
 
-  const getRawPoints = (score: number, maxScore: number) => {
+  const getRawPoints = useCallback((score: number, maxScore: number) => {
     const percentage = getDisplayPercentage(score);
     return Math.round((percentage / 100) * maxScore);
-  };
+  }, [getDisplayPercentage]);
 
-  const getDetailedStats = () => {
+  const stats = useMemo(() => {
     if (results.length === 0) return null;
 
     const completedResults = results.filter(r => r.is_completed);
@@ -171,9 +179,7 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
       slowestTime,
       tierCounts
     };
-  };
-
-  const stats = getDetailedStats();
+  }, [results, getDisplayPercentage, quizDetails?.tier_thresholds]);
 
   if (isLoading) {
     return (
@@ -463,4 +469,4 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
       </motion.div>
     </div>
   );
-} 
+}); 
