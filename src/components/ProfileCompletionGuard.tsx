@@ -21,7 +21,6 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
   const [error, setError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState({
     full_name: '',
-    phone: '',
     date_of_birth: '',
     address: '',
     bio: ''
@@ -37,14 +36,14 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('full_name, phone, date_of_birth, address, bio')
+          .select('full_name, date_of_birth, address, bio')
           .eq('id', user.id)
           .single();
 
         if (error) throw error;
 
         // Check if essential profile fields are filled
-        const requiredFields: (keyof typeof profileData)[] = ['full_name', 'phone'];
+        const requiredFields: (keyof typeof profileData)[] = ['full_name'];
         const isComplete = requiredFields.every(field => 
           data?.[field] && data[field].trim().length > 0
         );
@@ -55,14 +54,12 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
           // Pre-fill form with existing data
           setProfileData({
             full_name: data?.full_name || '',
-            phone: data?.phone || '',
             date_of_birth: data?.date_of_birth || '',
             address: data?.address || '',
             bio: data?.bio || ''
           });
         }
       } catch (err) {
-        console.error('Error checking profile:', err);
         // If there's an error checking the profile, allow access
         setIsProfileComplete(true);
       } finally {
@@ -85,16 +82,12 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
       if (!profileData.full_name.trim()) {
         throw new Error('Full name is required');
       }
-      if (!profileData.phone.trim()) {
-        throw new Error('Phone number is required');
-      }
 
       // Update profile
       const { error } = await supabase
         .from('users')
         .update({
           full_name: profileData.full_name.trim(),
-          phone: profileData.phone.trim(),
           date_of_birth: profileData.date_of_birth || null,
           address: profileData.address.trim() || null,
           bio: profileData.bio.trim() || null,
@@ -185,22 +178,6 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
                 />
               </div>
 
-              {/* Phone - Required */}
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  required
-                  value={profileData.phone}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder-gray-500"
-                  placeholder="Enter your phone number"
-                />
-              </div>
-
               {/* Date of Birth - Optional */}
               <div>
                 <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-2">
@@ -252,7 +229,7 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
               <div className="pt-6">
                 <Button
                   type="submit"
-                  disabled={isUpdatingProfile || !profileData.full_name.trim() || !profileData.phone.trim()}
+                  disabled={isUpdatingProfile || !profileData.full_name.trim()}
                   className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50"
                   size="lg"
                 >
