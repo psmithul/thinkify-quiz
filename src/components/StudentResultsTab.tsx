@@ -99,7 +99,6 @@ export function StudentResultsTab({ quizId }: StudentResultsTabProps) {
         minute: '2-digit'
       }).format(date);
     } catch (error) {
-      console.error('Date formatting error:', error);
       return 'Invalid date';
     }
   };
