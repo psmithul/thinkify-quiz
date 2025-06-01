@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS courses (
     description TEXT,
     content TEXT, -- Rich text content, markdown, or HTML
     thumbnail_url TEXT,
+    youtube_url TEXT, -- YouTube course/playlist URL
     duration_minutes INTEGER DEFAULT 0, -- Estimated course duration
     level TEXT DEFAULT 'beginner' CHECK (level IN ('beginner', 'intermediate', 'advanced')),
     category TEXT DEFAULT 'general',
@@ -27,6 +28,9 @@ CREATE TABLE IF NOT EXISTS courses (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Add youtube_url column to existing courses table if it doesn't exist
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS youtube_url TEXT;
 
 -- Add index for faster queries
 CREATE INDEX IF NOT EXISTS idx_courses_creator_id ON courses(creator_id);

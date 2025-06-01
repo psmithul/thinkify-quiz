@@ -187,7 +187,13 @@ export function CreatorCourses({ creatorId }: { creatorId: string }) {
               <div
                 key={course.id}
                 className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-shadow duration-200 cursor-pointer"
-                onClick={() => router.push(`/course/${course.id}`)}
+                onClick={() => {
+                  if (course.youtube_url) {
+                    window.open(course.youtube_url, '_blank');
+                  } else {
+                    router.push(`/course/${course.id}`);
+                  }
+                }}
               >
                 {/* Course Thumbnail */}
                 <div className="h-48 bg-gradient-to-r from-green-400 to-teal-500 relative overflow-hidden">
@@ -207,6 +213,13 @@ export function CreatorCourses({ creatorId }: { creatorId: string }) {
                       {course.level}
                     </span>
                   </div>
+                  {course.youtube_url && (
+                    <div className="absolute bottom-4 right-4">
+                      <span className="px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-full flex items-center gap-1">
+                        📺 YouTube
+                      </span>
+                    </div>
+                  )}
                   {course.is_featured && (
                     <div className="absolute top-4 left-4">
                       <span className="px-3 py-1 bg-yellow-400 text-yellow-900 text-xs font-medium rounded-full">
@@ -264,10 +277,14 @@ export function CreatorCourses({ creatorId }: { creatorId: string }) {
                     className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
                     onClick={(e) => {
                       e.stopPropagation();
-                      router.push(`/course/${course.id}`);
+                      if (course.youtube_url) {
+                        window.open(course.youtube_url, '_blank');
+                      } else {
+                        router.push(`/course/${course.id}`);
+                      }
                     }}
                   >
-                    View Course
+                    {course.youtube_url ? '📺 Watch on YouTube' : 'View Course'}
                   </Button>
                 </div>
               </div>

@@ -13,7 +13,7 @@ type AuthContextType = {
   isLoading: boolean;
   isAdmin: boolean;
   isCreator: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ success: boolean; redirectTo?: string }>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -59,45 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Handle redirects based on user role
-  useEffect(() => {
-    if (!isLoading && userData && typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      
-      // Skip redirects for auth, quiz-taking, and certificate pages
-      if (path.startsWith('/auth') || 
-          path.includes('/quiz/') || 
-          path.includes('/certificate/') ||
-          path === '/' ||
-          path === '/about' ||
-          path === '/pricing') {
-        return;
-      }
-      
-      // Redirect based on user role
-      if (userData.role === 'user') {
-        // Users can only access user routes
-        if (path.startsWith('/admin') || path.startsWith('/creator')) {
-          router.push('/user/dashboard');
-        }
-      } else if (userData.role === 'creator') {
-        // Creators automatically redirect to creator dashboard
-        if (!path.startsWith('/creator') && !path.startsWith('/user')) {
-          router.push('/creator/dashboard');
-        }
-        // Block creators from admin area
-        if (path.startsWith('/admin')) {
-          router.push('/creator/dashboard');
-        }
-      } else if (userData.role === 'admin') {
-        // Admins automatically redirect to admin dashboard
-        if (!path.startsWith('/admin') && !path.startsWith('/creator') && !path.startsWith('/user')) {
-          router.push('/admin/dashboard');
-        }
-      }
-    }
-  }, [isLoading, userData, router]);
 
   const fetchUserData = useCallback(async (userId: string) => {
     try {
@@ -150,10 +111,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  const signInWithEmail = async (email: string, password: string) => {
+  const signInWithEmail = async (email: string, password: string): Promise<{ success: boolean; redirectTo?: string }> => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+
+      // Fetch user data to determine redirect
+      if (data.user) {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('role, full_name')
+          .eq('id', data.user.id)
+          .single();
+
+        if (!userError && userData) {
+          // Determine redirect path based on role
+          let redirectTo = '/user/dashboard'; // default
+          
+          if (userData.role === 'admin') {
+            redirectTo = '/admin/dashboard';
+          } else if (userData.role === 'creator') {
+            redirectTo = '/creator/dashboard';
+          }
+          
+          return { success: true, redirectTo };
+        }
+      }
+      
+      return { success: true, redirectTo: '/user/dashboard' };
     } catch (error: any) {
       // If error is 400 and the table doesn't exist, we'll provide a helpful error
       if (error.status === 400) {

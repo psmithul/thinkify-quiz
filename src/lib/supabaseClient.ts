@@ -41,6 +41,7 @@ export type Course = {
   description?: string;
   content?: string;
   thumbnail_url?: string;
+  youtube_url?: string;
   duration_minutes?: number;
   level?: 'beginner' | 'intermediate' | 'advanced';
   category?: string;

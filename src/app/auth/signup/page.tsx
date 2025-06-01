@@ -1,301 +1,339 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Input } from '@/components/Input';
+import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
-import { useAuth } from '@/lib/authContext';
-import { formatErrorMessage } from '@/utils/errorHandler';
 import { supabase } from '@/lib/supabaseClient';
+import { formatErrorMessage } from '@/utils/errorHandler';
+import { motion } from 'framer-motion';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signUp, user, userData, isLoading: authLoading } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [isCreator, setIsCreator] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    fullName: '',
+    acceptTerms: false
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // Redirect authenticated users away from signup page
-  useEffect(() => {
-    if (!authLoading && user && userData) {
-      console.log('User is already authenticated, redirecting based on role:', userData.role);
-      
-      if (userData.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (userData.role === 'creator') {
-        router.push('/creator/dashboard');
-      } else {
-        router.push('/user/dashboard');
-      }
-    }
-  }, [user, userData, authLoading, router]);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.email || !formData.password || !formData.fullName) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (!formData.acceptTerms) {
+      setError('Please accept the terms and conditions');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
-
-    // Basic validation
-    if (!fullName.trim()) {
-      setError('Full name is required');
-      setIsLoading(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
-      return;
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
-      setIsLoading(false);
-      return;
-    }
+    setSuccess(null);
 
     try {
-      // Register with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-      
-      if (authError) throw authError;
-      
-      if (authData?.user) {
-        // Create user entry in users table with the selected role
-        const { error: userError } = await supabase.from('users').insert([
-          { 
-            id: authData.user.id, 
-            email, 
-            role: isCreator ? 'creator' : 'user',
-            full_name: fullName.trim()
+      // Sign up the user
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
           }
-        ]);
-        
-        if (userError) throw userError;
-        
-        // Redirect handled by useEffect in AuthProvider
+        }
+      });
+
+      if (signUpError) throw signUpError;
+
+      // Create user profile if signup was successful
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert([
+            {
+              id: data.user.id,
+              email: formData.email,
+              full_name: formData.fullName,
+              role: 'user', // Default role
+              profile_completed_at: new Date().toISOString(), // Mark profile as completed since we have full_name
+              created_at: new Date().toISOString()
+            }
+          ]);
+
+        if (profileError) {
+          console.warn('Profile creation failed:', profileError);
+          // Don't throw error here as the user account was created successfully
+        }
+
+        // Check if email confirmation is required
+        if (data.session) {
+          // User is immediately signed in, redirect to dashboard
+          setSuccess('Account created successfully! Redirecting to your dashboard...');
+          
+          setTimeout(() => {
+            router.push('/user/dashboard');
+          }, 2000);
+        } else {
+          // Email confirmation required
+          setSuccess('Account created successfully! Please check your email to verify your account, then sign in.');
+          
+          // Redirect to login after a longer delay
+          setTimeout(() => {
+            router.push('/auth/login');
+          }, 4000);
+        }
       }
     } catch (err) {
       setError(formatErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
-  }
-
-  async function handleLinkedInSignup() {
-    setIsLinkedInLoading(true);
-    setError(null);
-    
-    try {
-      // Use Supabase's built-in LinkedIn OIDC provider
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'linkedin_oidc',
-        options: {
-          redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/linkedin/callback`,
-          scopes: 'openid profile email'
-        }
-      });
-
-      if (error) {
-        console.error('LinkedIn OAuth error:', error);
-        throw error;
-      }
-
-      console.log('LinkedIn OAuth signup initiated successfully');
-      // The redirect will happen automatically via Supabase
-      
-    } catch (err) {
-      console.error('LinkedIn signup failed:', err);
-      setError(err instanceof Error ? err.message : 'LinkedIn signup failed. Please try again.');
-      setIsLinkedInLoading(false);
-    }
-  }
-
-  // Check if LinkedIn OAuth is configured
-  const isLinkedInConfigured = () => {
-    return true;
   };
 
-  // Show loading while checking authentication state
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 p-8">
-          <div className="text-center">
-            <div className="inline-flex items-center gap-3 mb-4">
-              <div className="text-4xl">🧠</div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                Thinkify
-              </h1>
-            </div>
-            <div className="flex justify-center">
-              <div className="relative">
-                <div className="w-8 h-8 border-4 border-purple-200 rounded-full animate-spin"></div>
-                <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
-              </div>
-            </div>
-            <p className="text-gray-600 mt-4">Checking authentication...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-3 mb-4">
-              <div className="text-4xl">🧠</div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                Thinkify
-              </h1>
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">Create your account</h2>
-            <p className="text-gray-600 mt-2">Join our learning community today</p>
-          </div>
-
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <Input
-                id="email-address"
-                label="Email address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-input"
-              />
-
-              <Input
-                id="full-name"
-                label="Full Name"
-                name="fullName"
-                type="text"
-                autoComplete="name"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="form-input"
-                helper="This will appear on your certificates and profile"
-              />
-
-              <Input
-                id="password"
-                label="Password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-input"
-                helper="Password must be at least 8 characters"
-              />
-
-              <Input
-                id="confirm-password"
-                label="Confirm Password"
-                name="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="form-input"
-              />
-              
-              <div className="flex items-center p-3 rounded-lg bg-purple-50 border border-purple-200">
-                <input
-                  id="is-creator"
-                  name="is-creator"
-                  type="checkbox"
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                  checked={isCreator}
-                  onChange={(e) => setIsCreator(e.target.checked)}
-                />
-                <label htmlFor="is-creator" className="ml-3 block text-sm text-gray-900">
-                  <span className="font-medium">Sign up as a quiz creator</span>
-                  <span className="block text-xs text-gray-600 mt-1">Create and publish your own quizzes</span>
-                </label>
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center"
+          >
+            <div className="flex justify-center mb-6">
+              <div className="h-16 w-16 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <span className="text-3xl">🚀</span>
               </div>
             </div>
+            <h2 className="heading-2 text-center">Join Thinkify</h2>
+            <p className="text-gray-600 text-lg">Create your account and start learning</p>
+          </motion.div>
 
-            {error && (
-              <div className="status-error">
-                <div className="flex items-center gap-3">
-                  <div className="text-xl">⚠️</div>
-                  <div>
-                    <p className="font-semibold">Sign up failed</p>
-                    <p className="text-sm mt-1">{error}</p>
+          {/* Form */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="form-container"
+          >
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="status-error"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">❌</span>
+                    <div>
+                      <p className="font-semibold">Registration Failed</p>
+                      <p className="text-sm mt-1">{error}</p>
+                    </div>
                   </div>
+                </motion.div>
+              )}
+
+              {success && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="status-success"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">✅</span>
+                    <div>
+                      <p className="font-semibold">Success!</p>
+                      <p className="text-sm mt-1">{success}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="fullName" className="form-label required">
+                  Full Name
+                </label>
+                <input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={formData.fullName}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  placeholder="Enter your full name"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="email" className="form-label required">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  placeholder="Enter your email address"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="password" className="form-label required">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  placeholder="Create a password (min. 6 characters)"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmPassword" className="form-label required">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  placeholder="Confirm your password"
+                />
+              </div>
+
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="acceptTerms"
+                    name="acceptTerms"
+                    type="checkbox"
+                    required
+                    checked={formData.acceptTerms}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                  />
+                </div>
+                <div className="ml-3 text-sm">
+                  <label htmlFor="acceptTerms" className="text-gray-700">
+                    I agree to the{' '}
+                    <Link href="/terms" className="font-medium text-purple-600 hover:text-purple-500">
+                      Terms and Conditions
+                    </Link>{' '}
+                    and{' '}
+                    <Link href="/privacy" className="font-medium text-purple-600 hover:text-purple-500">
+                      Privacy Policy
+                    </Link>
+                  </label>
                 </div>
               </div>
-            )}
 
-            <div className="space-y-4">
-              <Button
-                type="submit"
-                fullWidth
-                isLoading={isLoading}
-                variant="primary"
-                size="lg"
-              >
-                {isLoading ? 'Creating account...' : 'Create account'}
-              </Button>
+              <div>
+                <Button
+                  type="submit"
+                  disabled={isLoading || !formData.email || !formData.password || !formData.fullName || !formData.acceptTerms}
+                  className="w-full btn-primary"
+                  isLoading={isLoading}
+                >
+                  {isLoading ? 'Creating Account...' : 'Create Account'}
+                </Button>
+              </div>
 
-              {isLinkedInConfigured() && (
-                <>
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-300" />
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-4 bg-white text-gray-500 font-medium">Or sign up with</span>
-                    </div>
-                  </div>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">Or continue with</span>
+                </div>
+              </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    fullWidth
-                    size="lg"
-                    isLoading={isLinkedInLoading}
-                    onClick={handleLinkedInSignup}
-                    className="inline-flex items-center justify-center border-2 hover:border-blue-500 hover:text-blue-600"
-                  >
-                    <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                    </svg>
-                    {isLinkedInLoading ? 'Connecting...' : 'Continue with LinkedIn'}
-                  </Button>
-                </>
-              )}
-            </div>
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full btn-outline flex items-center justify-center gap-3"
+                  onClick={() => {
+                    // Add LinkedIn OAuth later if needed
+                    setError('LinkedIn sign-up is coming soon!');
+                  }}
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                  </svg>
+                  Continue with LinkedIn
+                </Button>
+              </div>
+            </form>
+          </motion.div>
 
-            <div className="flex flex-col space-y-3 text-center text-sm border-t border-gray-200 pt-6">
-              <Link href="/auth/login" className="text-purple-600 hover:text-purple-700 font-medium transition-colors">
-                Already have an account? <span className="font-semibold">Sign in</span>
+          {/* Footer */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="text-center"
+          >
+            <p className="text-gray-600">
+              Already have an account?{' '}
+              <Link href="/auth/login" className="font-semibold text-purple-600 hover:text-purple-500 transition-colors">
+                Sign in
               </Link>
-              <Link href="/auth/creator-signup" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
-                Want to create quizzes? <span className="font-semibold">Sign up as creator</span>
-              </Link>
+            </p>
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
+                Want to create content?{' '}
+                <Link href="/make-me-creator" className="font-medium text-indigo-600 hover:text-indigo-500">
+                  Become a Creator
+                </Link>
+              </p>
             </div>
-          </form>
+          </motion.div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 } 

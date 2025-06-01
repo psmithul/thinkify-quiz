@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/authContext';
 import { useRouter } from 'next/navigation';
-import { supabaseAdmin, createAdminOperation } from '@/lib/supabaseAdmin';
+import { supabase } from '@/lib/supabaseClient';
+import { createAdminOperation } from '@/lib/supabaseAdmin';
 import { Button } from '@/components/Button';
 import { formatErrorMessage } from '@/utils/errorHandler';
 
@@ -125,7 +126,7 @@ export default function CompaniesAdminPage() {
   const fetchCompanies = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('companies')
         .select(`
           *,
@@ -134,8 +135,10 @@ export default function CompaniesAdminPage() {
         .order('tier', { ascending: false });
 
       if (error) throw error;
+      console.log('Fetched companies:', data?.length || 0);
       setCompanies(data || []);
     } catch (err) {
+      console.error('Error fetching companies:', err);
       setError(formatErrorMessage(err));
     } finally {
       setLoading(false);

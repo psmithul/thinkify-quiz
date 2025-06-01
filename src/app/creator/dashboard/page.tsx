@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
@@ -30,7 +30,7 @@ export default function CreatorDashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview'|'quizzes'|'courses'|'analytics'|'profile'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview'|'quizzes'|'courses'|'profile'>('overview');
   
   useEffect(() => {
     async function checkAndFetchData() {
@@ -44,7 +44,8 @@ export default function CreatorDashboard() {
 
       try {
         setIsLoading(true);
-        
+        setError(null);
+
         // Fetch creator profile
         const { data: profileData, error: profileError } = await supabase
           .from('users')
@@ -52,52 +53,36 @@ export default function CreatorDashboard() {
           .eq('id', user.id)
           .single();
 
-        if (profileError) {
-          if (profileError.code === 'PGRST116') {
-            // User doesn't exist, redirect to complete profile
-            router.push('/user/complete-profile');
-            return;
-          }
-          throw profileError;
-        }
-
+        if (profileError) throw profileError;
         setCreatorProfile(profileData);
 
-        // Fetch user's quizzes
+        // Fetch creator's quizzes
         const { data: quizzesData, error: quizzesError } = await supabase
           .from('quizzes')
           .select('*')
           .eq('creator_id', user.id)
           .order('created_at', { ascending: false });
 
-        if (quizzesError) {
-          // Non-fatal error, continue without quizzes
-          setQuizzes([]);
-        } else {
-          setQuizzes(quizzesData || []);
-        }
+        if (quizzesError) throw quizzesError;
+        setQuizzes(quizzesData || []);
 
-        // Fetch user's courses
+        // Fetch creator's courses
         const { data: coursesData, error: coursesError } = await supabase
           .from('courses')
           .select('*')
           .eq('creator_id', user.id)
           .order('created_at', { ascending: false });
 
-        if (coursesError) {
-          // Non-fatal error, continue without courses
-          setCourses([]);
-        } else {
-          setCourses(coursesData || []);
-        }
+        if (coursesError) throw coursesError;
+        setCourses(coursesData || []);
 
-        // Calculate stats
+        // Calculate statistics
         const totalQuizzes = quizzesData?.length || 0;
         const totalCourses = coursesData?.length || 0;
+        let totalQuizAttempts = 0;
+        let totalCourseEnrollments = 0;
 
         // Fetch quiz attempt statistics
-        let totalQuizAttempts = 0;
-
         if (totalQuizzes > 0) {
           const quizIds = quizzesData?.map(q => q.id) || [];
           
@@ -113,8 +98,6 @@ export default function CreatorDashboard() {
         }
 
         // Fetch course enrollment statistics
-        let totalCourseEnrollments = 0;
-
         if (totalCourses > 0) {
           const courseIds = coursesData?.map(c => c.id) || [];
           
@@ -147,39 +130,48 @@ export default function CreatorDashboard() {
   if (authLoading || isLoading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex justify-center items-center">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="text-center"
+          >
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mx-auto mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading your dashboard...</p>
+          </motion.div>
         </div>
       </Layout>
     );
   }
 
-  // If not authorized, show a message
-  if (!isCreator && !isAdmin) {
+  if (error) {
     return (
       <Layout>
-        <div className="max-w-4xl mx-auto p-6 bg-red-50 rounded-lg border border-red-200">
-          <h1 className="text-2xl font-bold text-red-700 mb-4">Access Denied</h1>
-          <p className="text-red-600 mb-4">
-            You don't have permission to access the creator dashboard. You need to have a creator account.
-          </p>
-          <div className="flex gap-4">
-            <Button
-              onClick={() => router.push('/user/dashboard')}
-              variant="outline"
-            >
-              Go to User Dashboard
-            </Button>
-            <Button
-              onClick={() => router.push('/admin/setup-database')}
-            >
-              Setup Database
-            </Button>
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex justify-center items-center">
+          <div className="max-w-md w-full p-6">
+            <div className="bg-white rounded-2xl shadow-lg border border-red-200 p-8 text-center">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h1 className="text-2xl font-bold text-red-700 mb-4">Oops! Something went wrong</h1>
+              <p className="text-red-600 mb-6">{error}</p>
+              <Button 
+                onClick={() => window.location.reload()} 
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+              >
+                Try Again
+              </Button>
+            </div>
           </div>
         </div>
       </Layout>
     );
   }
+
+  const publishedQuizzes = quizzes.filter(q => q.is_published);
+  const publishedCourses = courses.filter(c => c.is_published);
+  const completionRate = creatorStats.totalQuizAttempts > 0 
+    ? Math.round((creatorStats.totalQuizAttempts / (creatorStats.totalQuizzes || 1)) * 100) 
+    : 0;
 
   return (
     <Layout>
@@ -191,144 +183,185 @@ export default function CreatorDashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-20 w-20 rounded-full overflow-hidden bg-gradient-to-r from-purple-500 to-indigo-600 p-0.5">
-                  <div className="h-full w-full rounded-full overflow-hidden bg-white">
-                {creatorProfile?.profile_image ? (
-                  <img 
-                    src={creatorProfile.profile_image} 
-                    alt={creatorProfile.full_name || 'Creator'} 
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                      <div className="flex items-center justify-center h-full w-full bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 text-2xl font-bold">
-                    {(creatorProfile?.full_name || creatorProfile?.email || 'C').charAt(0).toUpperCase()}
+            <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 rounded-3xl p-8 text-white shadow-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-6">
+                  <div className="h-20 w-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <span className="text-3xl font-bold text-white">
+                      {creatorProfile?.full_name?.charAt(0) || user?.email?.charAt(0) || 'C'}
+                    </span>
                   </div>
-                )}
-              </div>
-            </div>
-              <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
-                    Welcome back, {creatorProfile?.full_name || 'Creator'}! 👋
-                </h1>
-                  <p className="text-gray-600 mt-1">
-                    {creatorStats.totalQuizzes} quizzes and {creatorStats.totalCourses} courses created
-                  </p>
-                  {creatorProfile?.linkedin_url && (
-                    <p className="text-blue-600 text-sm mt-1">
-                      <a 
-                        href={creatorProfile.linkedin_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="hover:underline flex items-center gap-1"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                        </svg>
-                        LinkedIn Profile
-                      </a>
+                  <div>
+                    <h1 className="text-4xl font-bold mb-2">
+                      Welcome back, {creatorProfile?.full_name || 'Creator'}! 👋
+                    </h1>
+                    <p className="text-purple-100 text-lg">
+                      Ready to inspire minds and share knowledge?
                     </p>
-                  )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex space-x-3">
-                <Button 
-                  onClick={() => router.push('/creator/quiz/create')}
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-                >
-                  ➕ Create Quiz
-                </Button>
-                <Button 
-                  onClick={() => router.push('/creator/course/create')}
-                  className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
-                >
-                  📚 Create Course
-                </Button>
+                <div className="hidden lg:block">
+                  <div className="text-6xl opacity-30">🚀</div>
+                </div>
               </div>
             </div>
           </motion.div>
 
-          {/* Stats Grid */}
+          {/* Stats Cards */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
           >
-            {/* Quiz Stats */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+            <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Quizzes</p>
-                  <p className="text-3xl font-bold text-purple-600">{creatorStats.totalQuizzes}</p>
-                </div>
-                <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center text-2xl">
-                  🧠
-            </div>
-          </div>
-        </div>
-        
-            {/* Course Stats */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Courses</p>
-                  <p className="text-3xl font-bold text-green-600">{creatorStats.totalCourses}</p>
-                </div>
-                <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center text-2xl">
-                  📚
-          </div>
-              </div>
-            </div>
-            
-            {/* Engagement Stats */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Engagement</p>
-                  <p className="text-3xl font-bold text-indigo-600">{creatorStats.totalQuizAttempts + creatorStats.totalCourseEnrollments}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {creatorStats.totalQuizAttempts} quiz attempts, {creatorStats.totalCourseEnrollments} enrollments
+                  <p className="text-gray-500 text-sm font-medium">Total Quizzes</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-1">{creatorStats.totalQuizzes}</p>
+                  <p className="text-green-600 text-sm mt-1">
+                    {publishedQuizzes.length} published
                   </p>
                 </div>
-                <div className="h-12 w-12 bg-indigo-100 rounded-lg flex items-center justify-center text-2xl">
-                  📊
+                <div className="h-12 w-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">🧠</span>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium">Total Courses</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-1">{creatorStats.totalCourses}</p>
+                  <p className="text-green-600 text-sm mt-1">
+                    {publishedCourses.length} published
+                  </p>
+                </div>
+                <div className="h-12 w-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">📚</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium">Quiz Attempts</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-1">{creatorStats.totalQuizAttempts}</p>
+                  <p className="text-indigo-600 text-sm mt-1">
+                    {completionRate}% completion rate
+                  </p>
+                </div>
+                <div className="h-12 w-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">📊</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium">Enrollments</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-1">{creatorStats.totalCourseEnrollments}</p>
+                  <p className="text-green-600 text-sm mt-1">
+                    Students learning
+                  </p>
+                </div>
+                <div className="h-12 w-12 bg-green-100 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">🎓</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Quick Actions */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mb-8"
+          >
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Button
+                  onClick={() => router.push('/creator/quiz/create')}
+                  className="h-20 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                  fullWidth
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">🧠</div>
+                    <div className="text-sm font-medium">Create Quiz</div>
+                  </div>
+                </Button>
+                
+                <Button
+                  onClick={() => router.push('/creator/course/create')}
+                  className="h-20 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                  fullWidth
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">📚</div>
+                    <div className="text-sm font-medium">Create Course</div>
+                  </div>
+                </Button>
+                
+                <Button
+                  onClick={() => setActiveTab('quizzes')}
+                  variant="outline"
+                  className="h-20 border-2 border-purple-200 hover:border-purple-300 hover:bg-purple-50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                  fullWidth
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">📝</div>
+                    <div className="text-sm font-medium text-gray-700">Manage Quizzes</div>
+                  </div>
+                </Button>
+                
+                <Button
+                  onClick={() => setActiveTab('courses')}
+                  variant="outline"
+                  className="h-20 border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                  fullWidth
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">📖</div>
+                    <div className="text-sm font-medium text-gray-700">Manage Courses</div>
+                  </div>
+                </Button>
               </div>
             </div>
           </motion.div>
 
           {/* Navigation Tabs */}
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
             className="mb-8"
           >
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-2">
+              <div className="flex space-x-2">
                 {[
-                  { id: 'overview', name: 'Overview', icon: '🏠' },
-                  { id: 'quizzes', name: 'My Quizzes', icon: '🧠' },
-                  { id: 'courses', name: 'My Courses', icon: '📚' },
-                  { id: 'analytics', name: 'Analytics', icon: '📊' },
-                  { id: 'profile', name: 'Profile', icon: '👤' }
+                  { id: 'overview', label: '📊 Overview', icon: '📊' },
+                  { id: 'quizzes', label: '🧠 Quizzes', icon: '🧠' },
+                  { id: 'courses', label: '📚 Courses', icon: '📚' },
+                  { id: 'profile', label: '👤 Profile', icon: '👤' }
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`${
+                    className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
                       activeTab === tab.id
-                        ? 'border-purple-500 text-purple-600 bg-purple-50'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    } whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm rounded-t-lg transition-all duration-200`}
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
                   >
-                    <span className="mr-2">{tab.icon}</span>
-                    {tab.name}
+                    {tab.label}
                   </button>
                 ))}
-              </nav>
+              </div>
             </div>
           </motion.div>
 
@@ -340,452 +373,240 @@ export default function CreatorDashboard() {
             transition={{ delay: 0.1 }}
           >
             {activeTab === 'overview' && (
-              <div className="space-y-8">
-                {/* Quick Actions */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Button
-                      onClick={() => router.push('/creator/quiz/create')}
-                      variant="outline"
-                      className="flex items-center justify-center space-x-2 p-4 h-auto hover:bg-purple-50 hover:border-purple-300"
-                    >
-                      <span className="text-2xl">🧠</span>
-                      <span>Create Quiz</span>
-                    </Button>
-                    <Button
-                      onClick={() => router.push('/creator/course/create')}
-                      variant="outline"
-                      className="flex items-center justify-center space-x-2 p-4 h-auto hover:bg-green-50 hover:border-green-300"
-                    >
-                      <span className="text-2xl">📚</span>
-                      <span>Create Course</span>
-                    </Button>
-                    <Button
-                      onClick={() => setActiveTab('analytics')}
-                      variant="outline"
-                      className="flex items-center justify-center space-x-2 p-4 h-auto hover:bg-indigo-50 hover:border-indigo-300"
-                    >
-                      <span className="text-2xl">📊</span>
-                      <span>View Analytics</span>
-                    </Button>
-                    <Button
-                      onClick={() => setActiveTab('profile')}
-                      variant="outline"
-                      className="flex items-center justify-center space-x-2 p-4 h-auto hover:bg-gray-50 hover:border-gray-300"
-                    >
-                      <span className="text-2xl">👤</span>
-                      <span>Edit Profile</span>
-                    </Button>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Recent Activity */}
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Content</h3>
+                  <div className="space-y-4">
+                    {[...quizzes.slice(0, 3), ...courses.slice(0, 2)].slice(0, 5).map((item, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-10 w-10 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                            <span className="text-white text-sm">
+                              {'creator_id' in item ? '🧠' : '📚'}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 text-sm">{item.title}</p>
+                            <p className="text-gray-500 text-xs">
+                              {item.is_published ? 'Published' : 'Draft'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if ('creator_id' in item) {
+                              router.push(`/creator/quiz/${item.id}`);
+                            } else {
+                              router.push(`/creator/course/${item.id}/edit`);
+                            }
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                    ))}
+                    {quizzes.length === 0 && courses.length === 0 && (
+                      <div className="text-center py-8">
+                        <div className="text-4xl mb-2">🎯</div>
+                        <p className="text-gray-500">No content created yet. Start your journey!</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Recent Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Recent Quizzes */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Recent Quizzes</h3>
-                    {quizzes.length > 0 ? (
-                      <div className="space-y-4">
-                        {quizzes.slice(0, 3).map((quiz) => (
-                          <div
-                            key={quiz.id}
-                            className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:border-purple-200 transition-colors cursor-pointer"
-                            onClick={() => router.push(`/creator/quiz/${quiz.id}/edit`)}
-                          >
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900">{quiz.title}</h4>
-                              <p className="text-sm text-gray-500 mt-1">
-                                {quiz.description?.substring(0, 60)}...
-                              </p>
-                              <div className="flex items-center mt-2 text-xs">
-                                <span className={`px-2 py-1 rounded-full ${
-                                  quiz.is_published 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {quiz.is_published ? 'Published' : 'Draft'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-2xl ml-4">🧠</div>
-                          </div>
-                        ))}
+                {/* Performance Insights */}
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">Your Impact</h3>
+                  <div className="space-y-6">
+                    <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl">
+                      <div className="text-4xl font-bold text-purple-600 mb-2">
+                        {creatorStats.totalQuizAttempts + creatorStats.totalCourseEnrollments}
                       </div>
-                    ) : (
-                      <p className="text-gray-500">No quizzes created yet.</p>
-                    )}
-                  </div>
-
-                  {/* Recent Courses */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Recent Courses</h3>
-                    {courses.length > 0 ? (
-                      <div className="space-y-4">
-                        {courses.slice(0, 3).map((course) => (
-                          <div
-                            key={course.id}
-                            className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:border-green-200 transition-colors cursor-pointer"
-                            onClick={() => router.push(`/creator/course/${course.id}/edit`)}
-                          >
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900">{course.title}</h4>
-                              <p className="text-sm text-gray-500 mt-1">
-                                {course.description?.substring(0, 60)}...
-                              </p>
-                              <div className="flex items-center mt-2 text-xs space-x-2">
-                                <span className={`px-2 py-1 rounded-full ${
-                                  course.is_published 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {course.is_published ? 'Published' : 'Draft'}
-                                </span>
-                                <span className="text-gray-500">
-                                  {course.level} • {course.duration_minutes}min
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-2xl ml-4">📚</div>
-                          </div>
-                        ))}
+                      <p className="text-gray-600">Total Learners Reached</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-4 bg-green-50 rounded-xl">
+                        <div className="text-2xl font-bold text-green-600">
+                          {Math.round((publishedQuizzes.length / Math.max(creatorStats.totalQuizzes, 1)) * 100)}%
+                        </div>
+                        <p className="text-gray-600 text-sm">Quiz Publish Rate</p>
                       </div>
-                    ) : (
-                      <p className="text-gray-500">No courses created yet.</p>
-                    )}
+                      <div className="text-center p-4 bg-blue-50 rounded-xl">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {Math.round((publishedCourses.length / Math.max(creatorStats.totalCourses, 1)) * 100)}%
+                        </div>
+                        <p className="text-gray-600 text-sm">Course Publish Rate</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'quizzes' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">All Quizzes</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">Your Quizzes</h3>
                   <Button
                     onClick={() => router.push('/creator/quiz/create')}
                     className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
                   >
-                    ➕ Create New Quiz
+                    Create New Quiz
                   </Button>
                 </div>
-                
-                {quizzes.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">🧠</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No quizzes yet</h3>
-                    <p className="text-gray-500 mb-6">Create your first quiz to start testing knowledge!</p>
-                    <Button
-                      onClick={() => router.push('/creator/quiz/create')}
-                      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-                    >
-                      Create Your First Quiz
-                    </Button>
-              </div>
-            ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {quizzes.map((quiz) => (
-                      <motion.div
-                        key={quiz.id}
-                        whileHover={{ y: -4 }}
-                        className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200"
-                      >
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="text-3xl">🧠</div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            quiz.is_published 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-yellow-100 text-yellow-800'
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {quizzes.map((quiz) => (
+                    <div key={quiz.id} className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-300">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          quiz.is_published 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
                         }`}>
                           {quiz.is_published ? 'Published' : 'Draft'}
                         </span>
                       </div>
-                        <h4 className="font-semibold text-gray-900 mb-2">{quiz.title}</h4>
-                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                          {quiz.description || 'No description available'}
-                        </p>
-                        <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                          <span>Created {new Date(quiz.created_at).toLocaleDateString()}</span>
-                          <span className="text-purple-600 font-medium">Quiz</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            onClick={() => router.push(`/creator/quiz/${quiz.id}/edit`)}
-                            size="sm"
-                            className="flex-1 sm:flex-initial bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
-                          >
-                            ✏️ Edit Quiz
-                          </Button>
-                          <Button
-                            onClick={() => router.push(`/user/quiz/${quiz.id}`)}
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 sm:flex-initial border-gray-300 text-gray-700"
-                          >
-                            👁️ Preview
-                          </Button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'courses' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">All Courses</h3>
-                          <Button
-                    onClick={() => router.push('/creator/course/create')}
-                    className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
-                          >
-                    ➕ Create New Course
-                          </Button>
-                </div>
-                
-                {courses.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">📚</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No courses yet</h3>
-                    <p className="text-gray-500 mb-6">Create your first course to start teaching!</p>
-                          <Button
-                      onClick={() => router.push('/creator/course/create')}
-                      className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
-                          >
-                      Create Your First Course
-                          </Button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {courses.map((course) => (
-                      <motion.div
-                        key={course.id}
-                        whileHover={{ y: -4 }}
-                        className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200 cursor-pointer"
-                        onClick={() => router.push(`/creator/course/${course.id}/edit`)}
-                      >
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="text-3xl">📚</div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            course.is_published 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {course.is_published ? 'Published' : 'Draft'}
-                          </span>
-                        </div>
-                        <h4 className="font-semibold text-gray-900 mb-2">{course.title}</h4>
-                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                          {course.description || 'No description available'}
-                        </p>
-                        <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
-                          <span className="capitalize">{course.level}</span>
-                          <span>{course.duration_minutes}min</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm text-gray-500">
-                          <span>Created {new Date(course.created_at).toLocaleDateString()}</span>
-                          <span className="text-green-600 font-medium">Course</span>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'analytics' && (
-              <div className="space-y-6">
-                {/* Analytics Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-purple-100 text-sm">Total Quizzes</p>
-                        <p className="text-3xl font-bold">{creatorStats.totalQuizzes}</p>
-                      </div>
-                      <div className="text-4xl opacity-80">🧠</div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-blue-100 text-sm">Quiz Attempts</p>
-                        <p className="text-3xl font-bold">{creatorStats.totalQuizAttempts}</p>
-                      </div>
-                      <div className="text-4xl opacity-80">📊</div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-green-100 text-sm">Course Enrollments</p>
-                        <p className="text-3xl font-bold">{creatorStats.totalCourseEnrollments}</p>
-                      </div>
-                      <div className="text-4xl opacity-80">📚</div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-orange-100 text-sm">Total Courses</p>
-                        <p className="text-3xl font-bold">{creatorStats.totalCourses}</p>
-                      </div>
-                      <div className="text-4xl opacity-80">🎓</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Performance Summary */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Quiz Performance</h3>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Published Quizzes</span>
-                        <span className="font-medium">{quizzes.filter(q => q.is_published).length}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Draft Quizzes</span>
-                        <span className="font-medium">{quizzes.filter(q => !q.is_published).length}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Total Attempts</span>
-                        <span className="font-medium">{creatorStats.totalQuizAttempts}</span>
+                      <h4 className="font-semibold text-gray-900 mb-2">{quiz.title}</h4>
+                      <p className="text-gray-600 text-sm mb-4">{quiz.description}</p>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/creator/quiz/${quiz.id}/edit`)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => router.push(`/creator/quiz/${quiz.id}/manage`)}
+                        >
+                          Manage
+                        </Button>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Performance</h3>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Published Courses</span>
-                        <span className="font-medium">{courses.filter(c => c.is_published).length}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Draft Courses</span>
-                        <span className="font-medium">{courses.filter(c => !c.is_published).length}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Total Enrollments</span>
-                        <span className="font-medium">{creatorStats.totalCourseEnrollments}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Empty State */}
-                {quizzes.length === 0 && courses.length === 0 && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-                    <div className="text-6xl mb-4">📊</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Content Yet</h3>
-                    <p className="text-gray-500 mb-6">Create your first quiz or course to see analytics data!</p>
-                    <div className="flex justify-center space-x-4">
+                  ))}
+                  {quizzes.length === 0 && (
+                    <div className="col-span-full text-center py-12">
+                      <div className="text-6xl mb-4">🧠</div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No quizzes yet</h3>
+                      <p className="text-gray-500 mb-6">Create your first quiz to get started!</p>
                       <Button
                         onClick={() => router.push('/creator/quiz/create')}
                         className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
                       >
                         Create Quiz
                       </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'courses' && (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Your Courses</h3>
+                  <Button
+                    onClick={() => router.push('/creator/course/create')}
+                    className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+                  >
+                    Create New Course
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {courses.map((course) => (
+                    <div key={course.id} className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-300">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          course.is_published 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {course.is_published ? 'Published' : 'Draft'}
+                        </span>
+                        {course.youtube_url && (
+                          <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded">
+                            📺 YouTube
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-2">{course.title}</h4>
+                      <p className="text-gray-600 text-sm mb-4">{course.description}</p>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/creator/course/${course.id}/edit`)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => router.push(`/course/${course.id}`)}
+                        >
+                          View
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {courses.length === 0 && (
+                    <div className="col-span-full text-center py-12">
+                      <div className="text-6xl mb-4">📚</div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No courses yet</h3>
+                      <p className="text-gray-500 mb-6">Create your first course to get started!</p>
                       <Button
                         onClick={() => router.push('/creator/course/create')}
-                        variant="outline"
+                        className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
                       >
                         Create Course
                       </Button>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
 
             {activeTab === 'profile' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">Creator Profile</h3>
-                {creatorProfile && (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+                <h3 className="text-2xl font-bold text-gray-900 mb-6">Profile Settings</h3>
+                <div className="max-w-2xl">
                   <div className="space-y-6">
-                    <div className="flex items-center space-x-6">
-                      <div className="h-24 w-24 rounded-full overflow-hidden bg-gradient-to-r from-purple-500 to-indigo-600 p-0.5">
-                        <div className="h-full w-full rounded-full overflow-hidden bg-white">
-                          {creatorProfile.profile_image ? (
-                            <img 
-                              src={creatorProfile.profile_image} 
-                              alt={creatorProfile.full_name || 'Creator'} 
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex items-center justify-center h-full w-full bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 text-3xl font-bold">
-                              {(creatorProfile.full_name || creatorProfile.email || 'C').charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <h4 className="text-xl font-semibold text-gray-900">
-                          {creatorProfile.full_name || 'Creator Name'}
-                        </h4>
-                        <p className="text-gray-600">{creatorProfile.email}</p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {creatorProfile.job_title || 'Content Creator'} • {creatorProfile.location || 'Remote'}
-                        </p>
-                        {creatorProfile.linkedin_url && (
-                          <div className="mt-2">
-                            <a 
-                              href={creatorProfile.linkedin_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm hover:underline"
-                            >
-                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                              </svg>
-                              View LinkedIn Profile
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
                     <div>
-                      <h5 className="font-medium text-gray-900 mb-2">Bio</h5>
-                      <p className="text-gray-600">
-                        {creatorProfile.bio || 'No bio available. Add a bio to tell others about yourself!'}
-                      </p>
-                    </div>
-
-                    {/* Profile Stats */}
-                    <div className="border-t border-gray-200 pt-6">
-                      <h5 className="font-medium text-gray-900 mb-4">Profile Statistics</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-purple-50 rounded-lg p-4 text-center">
-                          <div className="text-2xl font-bold text-purple-600">{creatorStats.totalQuizzes}</div>
-                          <div className="text-sm text-purple-700">Quizzes Created</div>
-                        </div>
-                        <div className="bg-green-50 rounded-lg p-4 text-center">
-                          <div className="text-2xl font-bold text-green-600">{creatorStats.totalCourses}</div>
-                          <div className="text-sm text-green-700">Courses Created</div>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-4 text-center">
-                          <div className="text-2xl font-bold text-blue-600">{creatorStats.totalQuizAttempts + creatorStats.totalCourseEnrollments}</div>
-                          <div className="text-sm text-blue-700">Total Engagements</div>
-                        </div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Full Name
+                      </label>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        {creatorProfile?.full_name || 'Not set'}
                       </div>
                     </div>
-
-                    <div className="pt-6 border-t border-gray-200">
-                      <Button
-                        onClick={() => router.push('/creator/profile')}
-                        variant="outline"
-                      >
-                        Edit Profile
-                      </Button>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email
+                      </label>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        {creatorProfile?.email}
+                      </div>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Bio
+                      </label>
+                      <div className="p-3 bg-gray-50 rounded-lg min-h-[100px]">
+                        {creatorProfile?.bio || 'No bio added yet'}
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => router.push('/creator/profile')}
+                      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                    >
+                      Edit Profile
+                    </Button>
                   </div>
-                )}
+                </div>
               </div>
             )}
           </motion.div>
