@@ -191,32 +191,25 @@ export default function AdminDashboard() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Button
-              onClick={() => router.push('/admin/users')}
+              onClick={() => router.push('/admin/companies')}
               variant="outline"
               className="w-full"
             >
-              👥 Manage Users
+              🏢 Manage Companies
             </Button>
             <Button
-              onClick={() => router.push('/admin/quizzes')}
+              onClick={() => router.push('/admin/interviewers')}
               variant="outline"
               className="w-full"
             >
-              📋 All Quizzes
+              👨‍💼 Manage Interviewers
             </Button>
             <Button
-              onClick={() => router.push('/admin/analytics')}
+              onClick={() => router.push('/admin/recruiters')}
               variant="outline"
               className="w-full"
             >
-              📊 Platform Analytics
-            </Button>
-            <Button
-              onClick={() => router.push('/admin/settings')}
-              variant="outline"
-              className="w-full"
-            >
-              ⚙️ System Settings
+              🎯 Manage Recruiters
             </Button>
             <Button
               onClick={() => router.push('/creator/dashboard')}
@@ -231,6 +224,13 @@ export default function AdminDashboard() {
               className="w-full"
             >
               📚 Switch to User
+            </Button>
+            <Button
+              onClick={() => router.push('/admin/setup-database')}
+              variant="outline"
+              className="w-full"
+            >
+              ⚙️ Database Setup
             </Button>
           </div>
         </motion.div>

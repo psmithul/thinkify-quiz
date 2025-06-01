@@ -103,9 +103,9 @@ export default function CreatorDashboard() {
           
           const { data: attempts, error: attemptsError } = await supabase
             .from('quiz_attempts')
-            .select('score')
+            .select('score, is_completed')
             .in('quiz_id', quizIds)
-            .eq('completed', true);
+            .eq('is_completed', true);
 
           if (!attemptsError && attempts) {
             totalQuizAttempts = attempts.length;
@@ -596,17 +596,65 @@ export default function CreatorDashboard() {
 
             {activeTab === 'analytics' && (
               <div className="space-y-6">
+                {/* Analytics Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-100 text-sm">Total Quizzes</p>
+                        <p className="text-3xl font-bold">{creatorStats.totalQuizzes}</p>
+                      </div>
+                      <div className="text-4xl opacity-80">🧠</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-100 text-sm">Quiz Attempts</p>
+                        <p className="text-3xl font-bold">{creatorStats.totalQuizAttempts}</p>
+                      </div>
+                      <div className="text-4xl opacity-80">📊</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-100 text-sm">Course Enrollments</p>
+                        <p className="text-3xl font-bold">{creatorStats.totalCourseEnrollments}</p>
+                      </div>
+                      <div className="text-4xl opacity-80">📚</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-orange-100 text-sm">Total Courses</p>
+                        <p className="text-3xl font-bold">{creatorStats.totalCourses}</p>
+                      </div>
+                      <div className="text-4xl opacity-80">🎓</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Performance Summary */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Quiz Performance</h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Total Attempts</span>
-                        <span className="font-medium">{creatorStats.totalQuizAttempts}</span>
+                        <span className="text-gray-600">Published Quizzes</span>
+                        <span className="font-medium">{quizzes.filter(q => q.is_published).length}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Published Quizzes</span>
-                        <span className="font-medium">{quizzes.length - (quizzes.filter(q => !q.is_published).length)}</span>
+                        <span className="text-gray-600">Draft Quizzes</span>
+                        <span className="font-medium">{quizzes.filter(q => !q.is_published).length}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Total Attempts</span>
+                        <span className="font-medium">{creatorStats.totalQuizAttempts}</span>
                       </div>
                     </div>
                   </div>
@@ -615,24 +663,43 @@ export default function CreatorDashboard() {
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Performance</h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Published Courses</span>
+                        <span className="font-medium">{courses.filter(c => c.is_published).length}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Draft Courses</span>
+                        <span className="font-medium">{courses.filter(c => !c.is_published).length}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
                         <span className="text-gray-600">Total Enrollments</span>
                         <span className="font-medium">{creatorStats.totalCourseEnrollments}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Published Courses</span>
-                        <span className="font-medium">{courses.length - (courses.filter(c => !c.is_published).length)}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Avg. Course Duration</span>
-                        <span className="font-medium">
-                          {courses.length > 0 
-                            ? Math.round(courses.reduce((sum, c) => sum + (c.duration_minutes || 0), 0) / courses.length)
-                            : 0}min
-                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Empty State */}
+                {quizzes.length === 0 && courses.length === 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+                    <div className="text-6xl mb-4">📊</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Content Yet</h3>
+                    <p className="text-gray-500 mb-6">Create your first quiz or course to see analytics data!</p>
+                    <div className="flex justify-center space-x-4">
+                      <Button
+                        onClick={() => router.push('/creator/quiz/create')}
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                      >
+                        Create Quiz
+                      </Button>
+                      <Button
+                        onClick={() => router.push('/creator/course/create')}
+                        variant="outline"
+                      >
+                        Create Course
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -678,8 +745,8 @@ export default function CreatorDashboard() {
                               </svg>
                               View LinkedIn Profile
                             </a>
-          </div>
-        )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -717,10 +784,10 @@ export default function CreatorDashboard() {
                         Edit Profile
                       </Button>
                     </div>
-          </div>
-        )}
-          </div>
-        )}
+                  </div>
+                )}
+              </div>
+            )}
           </motion.div>
         </div>
       </div>
