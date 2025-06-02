@@ -177,9 +177,55 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
                   </motion.div>
                 )}
 
+                {/* Show LinkedIn import status if available */}
+                {userData && (userData.linkedin_url || userData.job_title || userData.location || userData.company) && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-blue-50 border border-blue-200 rounded-lg p-4"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-xl">💼</span>
+                      <div>
+                        <p className="font-semibold text-blue-900">LinkedIn Data Imported</p>
+                        <p className="text-sm text-blue-700">We've imported some information from your LinkedIn profile</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      {userData.job_title && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span className="text-blue-700">Job Title: {userData.job_title}</span>
+                        </div>
+                      )}
+                      {userData.company && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span className="text-blue-700">Company: {userData.company}</span>
+                        </div>
+                      )}
+                      {userData.location && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span className="text-blue-700">Location: {userData.location}</span>
+                        </div>
+                      )}
+                      {userData.bio && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span className="text-blue-700">Bio imported</span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
                 <div>
                   <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-2">
                     Full Name <span className="text-red-500">*</span>
+                    {userData?.full_name && (
+                      <span className="ml-2 text-green-600 text-xs">✓ From LinkedIn</span>
+                    )}
                   </label>
                   <input
                     id="full_name"
@@ -196,6 +242,9 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
                 <div>
                   <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-2">
                     Bio (Optional)
+                    {userData?.bio && (
+                      <span className="ml-2 text-green-600 text-xs">✓ From LinkedIn</span>
+                    )}
                   </label>
                   <textarea
                     id="bio"
@@ -206,6 +255,9 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Tell us a little about yourself..."
                   />
+                  {userData?.bio && (
+                    <p className="text-xs text-gray-500 mt-1">Bio imported from LinkedIn. You can edit it above.</p>
+                  )}
                 </div>
 
                 <div className="flex gap-3">
@@ -239,6 +291,11 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
               <p className="text-sm text-gray-500">
                 You can update your profile information anytime from your account settings.
               </p>
+              {userData && (userData.linkedin_url || userData.job_title || userData.company) && (
+                <p className="text-xs text-blue-600 mt-2">
+                  ℹ️ Additional LinkedIn data like job title, company, and location are already saved in your profile.
+                </p>
+              )}
             </motion.div>
           </div>
         </div>
