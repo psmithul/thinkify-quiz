@@ -62,54 +62,91 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = useCallback(async (userId: string) => {
     try {
-      // Check if users table exists first
-      const { error: tableError } = await supabase
-        .from('users')
-        .select('count')
-        .limit(1);
-
-      // If we get a 404, the table doesn't exist yet
-      if (tableError && tableError.code === '42P01') {
-        setIsLoading(false);
-        return;
-      }
+      setIsLoading(true);
       
+      // Simple query to get user data
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, email, full_name, role, profile_image, created_at')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to handle no results gracefully
 
       if (error) {
-        // If user is not found in the users table, we'll create one with default role
-        if (error.code === 'PGRST116') {
-          const userEmail = user?.email || 'unknown@example.com';
-          
-          const { data: userData, error: insertError } = await supabase
-            .from('users')
-            .insert([
-              { id: userId, email: userEmail, role: 'user' }
-            ])
-            .select()
-            .single();
+        console.warn('Error fetching user data:', error);
+        
+        // If user doesn't exist, try to create one with basic info
+        if (error.code === 'PGRST116' || error.details?.includes('0 rows')) {
+          try {
+            const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
+            const userName = user?.user_metadata?.full_name || session?.user?.user_metadata?.full_name || '';
+            
+            const { data: newUserData, error: insertError } = await supabase
+              .from('users')
+              .insert([{
+                id: userId,
+                email: userEmail,
+                full_name: userName || userEmail.split('@')[0],
+                role: 'user'
+              }])
+              .select('id, email, full_name, role, profile_image, created_at')
+              .single();
 
-          if (!insertError && userData) {
-            setUserData(userData as User);
-            setIsAdmin(userData.role === 'admin');
-            setIsCreator(userData.role === 'creator');
+            if (!insertError && newUserData) {
+              setUserData(newUserData as User);
+              setIsAdmin(newUserData.role === 'admin');
+              setIsCreator(newUserData.role === 'creator');
+            } else {
+              console.warn('Failed to create user profile:', insertError);
+              // Set minimal user data from auth session
+              setUserData({
+                id: userId,
+                email: userEmail,
+                full_name: userName || userEmail.split('@')[0],
+                role: 'user'
+              } as User);
+            }
+          } catch (createError) {
+            console.warn('Error creating user profile:', createError);
+            // Fallback: create minimal user data from session
+            const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
+            setUserData({
+              id: userId,
+              email: userEmail,
+              full_name: userEmail.split('@')[0],
+              role: 'user'
+            } as User);
           }
         }
       } else if (data) {
         setUserData(data as User);
-        setIsAdmin(data?.role === 'admin');
-        setIsCreator(data?.role === 'creator');
+        setIsAdmin(data.role === 'admin');
+        setIsCreator(data.role === 'creator');
+      } else {
+        // No user data found, create minimal profile
+        const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
+        const userName = user?.user_metadata?.full_name || session?.user?.user_metadata?.full_name || '';
+        
+        setUserData({
+          id: userId,
+          email: userEmail,
+          full_name: userName || userEmail.split('@')[0],
+          role: 'user'
+        } as User);
       }
     } catch (error) {
-      // Silently handle errors in production
+      console.warn('Unexpected error in fetchUserData:', error);
+      // Fallback: create basic user data from auth session
+      const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
+      setUserData({
+        id: userId,
+        email: userEmail,
+        full_name: userEmail.split('@')[0],
+        role: 'user'
+      } as User);
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, session]);
 
   const signInWithEmail = async (email: string, password: string): Promise<{ success: boolean; redirectTo?: string }> => {
     try {
