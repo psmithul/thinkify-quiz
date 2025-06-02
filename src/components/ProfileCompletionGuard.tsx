@@ -33,18 +33,28 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
   useEffect(() => {
     // Only check profile completion for authenticated users on protected pages
     if (!user || !userData || isPublicPage || authLoading) {
+      console.log('ProfileCompletionGuard - skipping check:', {
+        hasUser: !!user,
+        hasUserData: !!userData,
+        isPublicPage,
+        authLoading
+      });
       setShowProfileCompletion(false);
       return;
     }
 
     console.log('ProfileCompletionGuard - checking user data:', userData);
+    console.log('Current pathname:', pathname);
 
-    // Check if profile needs completion - only require name, other fields are optional
-    const needsCompletion = !userData.full_name || userData.full_name.trim().length < 2;
+    // Check if profile needs completion - be more strict about requirements
+    const hasValidName = userData.full_name && userData.full_name.trim().length >= 2;
+    const needsCompletion = !hasValidName;
     
     console.log('Profile completion check:', {
       full_name: userData.full_name,
+      full_name_trimmed: userData.full_name?.trim(),
       full_name_length: userData.full_name?.trim().length,
+      hasValidName,
       needsCompletion,
       hasLinkedInData: {
         profile_image: !!userData.profile_image,
@@ -57,14 +67,14 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
     });
     
     if (needsCompletion) {
-      console.log('Profile needs completion, showing form');
+      console.log('🚨 Profile needs completion, showing form');
       setShowProfileCompletion(true);
       setProfileData({
         full_name: userData.full_name || '',
         bio: userData.bio || ''
       });
     } else {
-      console.log('Profile is complete, not showing form');
+      console.log('✅ Profile is complete, not showing form');
       setShowProfileCompletion(false);
     }
   }, [user, userData, isPublicPage, authLoading, pathname]);
@@ -151,7 +161,10 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
                 </div>
               </div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Complete Your Profile</h2>
-              <p className="text-gray-600 text-lg">Please provide some basic information to get started</p>
+              <p className="text-gray-600 text-lg">Please provide your full name to continue</p>
+              {userData && !userData.full_name && (
+                <p className="text-sm text-red-600 mt-2">⚠️ Your profile is missing required information</p>
+              )}
             </motion.div>
 
             <motion.div

@@ -230,15 +230,18 @@ export default function LinkedInCallbackHandler() {
 
           if (insertError) {
             console.warn('Profile creation failed, creating minimal profile:', insertError);
-            // Create minimal profile
+            
+            // If the full profile creation fails, create a minimal profile that will trigger completion
             const minimalProfile = {
               id: extractedData.id,
               email: extractedData.email,
-              full_name: extractedData.full_name,
+              full_name: extractedData.full_name.length >= 2 ? extractedData.full_name : '', // Ensure empty if too short
               role: extractedData.role,
               created_at: extractedData.created_at,
               updated_at: extractedData.updated_at
             };
+            
+            console.log('Creating minimal profile:', minimalProfile);
             
             const { data: minimalUser, error: minimalError } = await supabase
               .from('users')
@@ -247,9 +250,17 @@ export default function LinkedInCallbackHandler() {
               .single();
               
             if (minimalError) {
-              throw minimalError;
+              console.error('Even minimal profile creation failed:', minimalError);
+              throw new Error(`Failed to create user profile: ${minimalError.message}`);
             }
             userData = minimalUser;
+            
+            // Force profile completion for minimal profiles
+            setMissingFields(['full_name']);
+            setLinkedinData(extractedData);
+            setStatus('profile-completion');
+            setMessage('Please complete your profile');
+            return;
           } else {
             userData = newUser;
           }

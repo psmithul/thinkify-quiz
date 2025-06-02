@@ -84,23 +84,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const userName = user?.user_metadata?.full_name || session?.user?.user_metadata?.full_name || '';
             
             console.log('Creating new user with email:', userEmail, 'name:', userName);
+            console.log('User metadata available:', user?.user_metadata);
             
-            const { data: newUserData, error: insertError } = await supabase
+            const newUserData = {
+              id: userId,
+              email: userEmail,
+              full_name: userName && userName.trim().length >= 2 ? userName.trim() : '', // Ensure empty if invalid
+              role: 'user'
+            };
+            
+            console.log('Inserting new user data:', newUserData);
+            
+            const { data: newUserData_result, error: insertError } = await supabase
               .from('users')
-              .insert([{
-                id: userId,
-                email: userEmail,
-                full_name: userName || userEmail.split('@')[0],
-                role: 'user'
-              }])
+              .insert([newUserData])
               .select('*') // Fetch all fields
               .single();
 
-            if (!insertError && newUserData) {
-              console.log('Created new user:', newUserData);
-              setUserData(newUserData as User);
-              setIsAdmin(newUserData.role === 'admin');
-              setIsCreator(newUserData.role === 'creator');
+            if (!insertError && newUserData_result) {
+              console.log('Created new user:', newUserData_result);
+              setUserData(newUserData_result as User);
+              setIsAdmin(newUserData_result.role === 'admin');
+              setIsCreator(newUserData_result.role === 'creator');
             } else {
               console.warn('Failed to create user profile:', insertError);
               // Set minimal user data from auth session
