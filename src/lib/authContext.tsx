@@ -2,9 +2,10 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { Session, User as SupabaseUser, AuthError } from '@supabase/supabase-js';
-import { supabase, User } from './supabaseClient';
+import { supabase } from './supabaseClient';
 import { useRouter } from 'next/navigation';
 import { ProfileCompletionGuard } from '@/components/ProfileCompletionGuard';
+import { User } from '@/types/user';
 
 type AuthContextType = {
   session: Session | null;
@@ -64,12 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       
-      // Simple query to get user data
+      // Query to get complete user data including LinkedIn fields
       const { data, error } = await supabase
         .from('users')
-        .select('id, email, full_name, role, profile_image, created_at')
+        .select('*') // Fetch all fields including LinkedIn data
         .eq('id', userId)
         .maybeSingle(); // Use maybeSingle instead of single to handle no results gracefully
+
+      console.log('Fetched user data:', data);
 
       if (error) {
         console.warn('Error fetching user data:', error);
@@ -80,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
             const userName = user?.user_metadata?.full_name || session?.user?.user_metadata?.full_name || '';
             
+            console.log('Creating new user with email:', userEmail, 'name:', userName);
+            
             const { data: newUserData, error: insertError } = await supabase
               .from('users')
               .insert([{
@@ -88,10 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 full_name: userName || userEmail.split('@')[0],
                 role: 'user'
               }])
-              .select('id, email, full_name, role, profile_image, created_at')
+              .select('*') // Fetch all fields
               .single();
 
             if (!insertError && newUserData) {
+              console.log('Created new user:', newUserData);
               setUserData(newUserData as User);
               setIsAdmin(newUserData.role === 'admin');
               setIsCreator(newUserData.role === 'creator');
@@ -118,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } else if (data) {
+        console.log('Setting user data:', data);
         setUserData(data as User);
         setIsAdmin(data.role === 'admin');
         setIsCreator(data.role === 'creator');
@@ -126,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
         const userName = user?.user_metadata?.full_name || session?.user?.user_metadata?.full_name || '';
         
+        console.log('No user data found, creating minimal profile');
         setUserData({
           id: userId,
           email: userEmail,

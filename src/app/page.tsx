@@ -141,6 +141,18 @@ export default function HomePage() {
   };
 
   useEffect(() => {
+    // Redirect authenticated users to their dashboard
+    if (user && userData && !authLoading) {
+      const redirectUrl = userData.role === 'admin' ? '/admin/dashboard' : 
+                         userData.role === 'creator' ? '/creator/dashboard' : 
+                         '/user/dashboard';
+      
+      console.log('Redirecting authenticated user to:', redirectUrl);
+      router.push(redirectUrl);
+    }
+  }, [user, userData, authLoading, router]);
+
+  useEffect(() => {
     async function fetchStats() {
       try {
         const [quizzesRes, coursesRes, creatorsRes, attemptsRes] = await Promise.all([
@@ -161,8 +173,11 @@ export default function HomePage() {
       }
     }
 
-    fetchStats();
-  }, []);
+    // Only fetch stats if user is not authenticated (to avoid unnecessary API calls)
+    if (!user || authLoading) {
+      fetchStats();
+    }
+  }, [user, authLoading]);
 
   return (
     <Layout>

@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import { motion } from 'framer-motion';
+import { User } from '@/types/user';
 
 interface ProfileCompletionGuardProps {
   children: React.ReactNode;
@@ -36,16 +37,34 @@ export function ProfileCompletionGuard({ children }: ProfileCompletionGuardProps
       return;
     }
 
-    // Check if profile needs completion
+    console.log('ProfileCompletionGuard - checking user data:', userData);
+
+    // Check if profile needs completion - only require name, other fields are optional
     const needsCompletion = !userData.full_name || userData.full_name.trim().length < 2;
     
+    console.log('Profile completion check:', {
+      full_name: userData.full_name,
+      full_name_length: userData.full_name?.trim().length,
+      needsCompletion,
+      hasLinkedInData: {
+        profile_image: !!userData.profile_image,
+        linkedin_url: !!userData.linkedin_url,
+        job_title: !!userData.job_title,
+        location: !!userData.location,
+        bio: !!userData.bio,
+        company: !!userData.company
+      }
+    });
+    
     if (needsCompletion) {
+      console.log('Profile needs completion, showing form');
       setShowProfileCompletion(true);
       setProfileData({
         full_name: userData.full_name || '',
         bio: userData.bio || ''
       });
     } else {
+      console.log('Profile is complete, not showing form');
       setShowProfileCompletion(false);
     }
   }, [user, userData, isPublicPage, authLoading, pathname]);

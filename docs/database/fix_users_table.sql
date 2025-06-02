@@ -1,12 +1,19 @@
 -- Fix users table by adding missing columns for LinkedIn OAuth integration
 -- This file should be run in Supabase SQL Editor
 
--- Add missing columns to users table
+-- Add missing columns to users table including comprehensive LinkedIn fields
 ALTER TABLE users 
 ADD COLUMN IF NOT EXISTS full_name TEXT,
 ADD COLUMN IF NOT EXISTS bio TEXT,
 ADD COLUMN IF NOT EXISTS profile_image TEXT,
 ADD COLUMN IF NOT EXISTS linkedin_url TEXT,
+ADD COLUMN IF NOT EXISTS job_title TEXT,
+ADD COLUMN IF NOT EXISTS location TEXT,
+ADD COLUMN IF NOT EXISTS company TEXT,
+ADD COLUMN IF NOT EXISTS industry TEXT,
+ADD COLUMN IF NOT EXISTS phone TEXT,
+ADD COLUMN IF NOT EXISTS website TEXT,
+ADD COLUMN IF NOT EXISTS skills TEXT[], -- Array of skills
 ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user',
 ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(),
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
@@ -107,4 +114,12 @@ COMMENT ON COLUMN users.created_at IS 'Timestamp when the user account was creat
 COMMENT ON COLUMN users.updated_at IS 'Timestamp when the user account was last updated';
 COMMENT ON COLUMN users.linkedin_url IS 'User LinkedIn profile URL from OAuth login';
 COMMENT ON COLUMN users.profile_image IS 'User profile image URL (can be from LinkedIn or uploaded)';
-COMMENT ON COLUMN users.full_name IS 'User full name (from LinkedIn or manual entry)'; 
+COMMENT ON COLUMN users.full_name IS 'User full name (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.bio IS 'User bio/summary (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.job_title IS 'User job title/headline (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.location IS 'User location (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.company IS 'User company/organization (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.industry IS 'User industry (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.phone IS 'User phone number (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.website IS 'User website URL (from LinkedIn or manual entry)';
+COMMENT ON COLUMN users.skills IS 'Array of user skills (from LinkedIn or manual entry)'; 
