@@ -68,22 +68,24 @@ export default function LinkedInCallbackHandler() {
         }
         
         // Extract LinkedIn profile data with fallbacks
+        const userMetadata = data.user.user_metadata || {};
+        const fullName = userMetadata.full_name || 
+                        userMetadata.name || 
+                        userMetadata.given_name + ' ' + userMetadata.family_name || 
+                        data.user.email?.split('@')[0] || 
+                        'LinkedIn User';
+
         const profileData = {
           id: data.user.id,
           email: data.user.email!,
-          full_name: data.user.user_metadata?.full_name || 
-                    data.user.user_metadata?.name || 
-                    data.user.user_metadata?.given_name + ' ' + data.user.user_metadata?.family_name || 
-                    data.user.email?.split('@')[0],
-          profile_image: data.user.user_metadata?.picture || 
-                        data.user.user_metadata?.avatar_url,
-          linkedin_url: data.user.user_metadata?.linkedin_url,
+          full_name: fullName.trim(),
+          profile_image: userMetadata.picture || userMetadata.avatar_url,
+          linkedin_url: userMetadata.linkedin_url,
           role: isCreatorSignup ? 'creator' : 'user', // Assign role based on signup context
           // Extract additional LinkedIn data if available
-          job_title: data.user.user_metadata?.job_title || 
-                    data.user.user_metadata?.headline,
-          location: data.user.user_metadata?.location,
-          bio: data.user.user_metadata?.summary,
+          job_title: userMetadata.job_title || userMetadata.headline,
+          location: userMetadata.location,
+          bio: userMetadata.summary,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -94,22 +96,55 @@ export default function LinkedInCallbackHandler() {
           role: profileData.role
         });
         
-        // Update or create user profile in our users table
-        const { data: userData, error: profileError } = await supabase
+        // Check if user already exists
+        const { data: existingUser, error: checkError } = await supabase
           .from('users')
-          .upsert(profileData, {
-            onConflict: 'id',
-            ignoreDuplicates: false
-          })
-          .select()
+          .select('*')
+          .eq('id', data.user.id)
           .single();
-        
-        if (profileError) {
-          console.error('Profile update failed:', profileError);
-          throw profileError;
+
+        let userData;
+
+        if (existingUser) {
+          // User exists, update their profile with latest LinkedIn data
+          console.log('Updating existing user profile...');
+          const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update({
+              full_name: profileData.full_name,
+              profile_image: profileData.profile_image,
+              linkedin_url: profileData.linkedin_url,
+              job_title: profileData.job_title,
+              location: profileData.location,
+              bio: profileData.bio,
+              updated_at: profileData.updated_at
+            })
+            .eq('id', data.user.id)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error('Profile update failed:', updateError);
+            throw updateError;
+          }
+          userData = updatedUser;
+        } else {
+          // User doesn't exist, create new profile
+          console.log('Creating new user profile...');
+          const { data: newUser, error: insertError } = await supabase
+            .from('users')
+            .insert([profileData])
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Profile creation failed:', insertError);
+            throw insertError;
+          }
+          userData = newUser;
         }
         
-        console.log('User profile created/updated successfully:', userData);
+        console.log('User profile processed successfully:', userData);
         
         setStatus('success');
         setMessage(`LinkedIn authentication successful! Welcome to Thinkify${userData.role === 'creator' ? ' as a creator' : ''}!`);
@@ -205,7 +240,15 @@ export default function LinkedInCallbackHandler() {
                 <div>
                   <p className="text-lg font-semibold text-red-900">Authentication Failed</p>
                   <p className="text-red-700 mt-2">{message}</p>
-                  <p className="text-gray-600 text-sm mt-3">Redirecting to login page...</p>
+                  <p className="text-gray-600 text-sm mt-4">You will be redirected to the login page shortly...</p>
+                </div>
+                <div className="mt-4">
+                  <button
+                    onClick={() => router.push('/auth/login')}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                  >
+                    Back to Login
+                  </button>
                 </div>
               </div>
             )}

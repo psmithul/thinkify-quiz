@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
+import { authDebugger, validateSignupData, checkEnvironmentVariables } from '@/utils/authDebug';
 import { motion } from 'framer-motion';
 
 export default function SignupPage() {
@@ -19,8 +20,16 @@ export default function SignupPage() {
     acceptTerms: false
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check environment on page load
+    checkEnvironmentVariables();
+    authDebugger.testSupabaseConnection();
+    authDebugger.testDatabaseConnection();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -33,24 +42,12 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
-    if (!formData.email || !formData.password || !formData.fullName) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return;
-    }
-
-    if (!formData.acceptTerms) {
-      setError('Please accept the terms and conditions');
+    // Client-side validation with debug logging
+    const validationErrors = validateSignupData(formData);
+    if (validationErrors.length > 0) {
+      const errorMessage = validationErrors.join(', ');
+      authDebugger.log('Form Validation', false, { errors: validationErrors }, errorMessage);
+      setError(errorMessage);
       return;
     }
 
@@ -59,6 +56,8 @@ export default function SignupPage() {
     setSuccess(null);
 
     try {
+      authDebugger.log('Signup Started', true, { email: formData.email });
+      
       // Sign up the user
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -70,31 +69,68 @@ export default function SignupPage() {
         }
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        authDebugger.log('Supabase Signup', false, { email: formData.email }, signUpError.message);
+        throw signUpError;
+      }
+
+      authDebugger.log('Supabase Signup', true, { 
+        userId: data.user?.id, 
+        email: data.user?.email,
+        hasSession: !!data.session 
+      });
 
       // Create user profile if signup was successful
       if (data.user) {
-        const { error: profileError } = await supabase
+        authDebugger.log('Profile Creation Started', true, { userId: data.user.id });
+        
+        const profileData = {
+          id: data.user.id,
+          email: formData.email,
+          full_name: formData.fullName,
+          role: 'user', // Default role
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        // Check if user profile already exists (in case of re-signup)
+        const { data: existingProfile, error: checkError } = await supabase
           .from('users')
-          .insert([
-            {
-              id: data.user.id,
+          .select('id')
+          .eq('id', data.user.id)
+          .single();
+
+        if (existingProfile) {
+          authDebugger.log('Profile Update', true, { userId: data.user.id, exists: true });
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
               email: formData.email,
               full_name: formData.fullName,
-              role: 'user', // Default role
-              profile_completed_at: new Date().toISOString(), // Mark profile as completed since we have full_name
-              created_at: new Date().toISOString()
-            }
-          ]);
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', data.user.id);
 
-        if (profileError) {
-          console.warn('Profile creation failed:', profileError);
-          // Don't throw error here as the user account was created successfully
+          if (updateError) {
+            authDebugger.log('Profile Update', false, { userId: data.user.id }, updateError.message);
+            // Don't throw error here as the user account was created successfully
+          }
+        } else {
+          authDebugger.log('Profile Creation', true, { userId: data.user.id, exists: false });
+          const { error: profileError } = await supabase
+            .from('users')
+            .insert([profileData]);
+
+          if (profileError) {
+            authDebugger.log('Profile Creation', false, profileData, profileError.message);
+            // Don't throw error here as the user account was created successfully
+          }
         }
 
         // Check if email confirmation is required
         if (data.session) {
           // User is immediately signed in, redirect to dashboard
+          authDebugger.log('Immediate Signin', true, { userId: data.user.id });
           setSuccess('Account created successfully! Redirecting to your dashboard...');
           
           setTimeout(() => {
@@ -102,6 +138,7 @@ export default function SignupPage() {
           }, 2000);
         } else {
           // Email confirmation required
+          authDebugger.log('Email Confirmation Required', true, { userId: data.user.id });
           setSuccess('Account created successfully! Please check your email to verify your account, then sign in.');
           
           // Redirect to login after a longer delay
@@ -109,18 +146,74 @@ export default function SignupPage() {
             router.push('/auth/login');
           }, 4000);
         }
+      } else {
+        authDebugger.log('No User Data', false, { hasData: !!data }, 'No user data returned from signup');
+        throw new Error('No user data returned from signup');
       }
     } catch (err) {
+      authDebugger.log('Signup Failed', false, { email: formData.email }, formatErrorMessage(err));
       setError(formatErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleLinkedInSignup = async () => {
+    setIsLinkedInLoading(true);
+    setError(null);
+
+    try {
+      authDebugger.log('LinkedIn OAuth Started', true);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: `${window.location.origin}/auth/linkedin/callback`,
+          scopes: 'profile email openid'
+        }
+      });
+
+      if (error) {
+        authDebugger.log('LinkedIn OAuth', false, null, error.message);
+        throw error;
+      }
+
+      authDebugger.log('LinkedIn OAuth', true, { redirecting: true });
+      // The redirect will happen automatically
+    } catch (err) {
+      authDebugger.log('LinkedIn Signup Failed', false, null, formatErrorMessage(err));
+      setError(formatErrorMessage(err));
+      setIsLinkedInLoading(false);
+    }
+  };
+
+  // Debug helper - only show in development
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
+          {/* Debug Panel - Only in development */}
+          {isDevelopment && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-gray-100 p-4 rounded-lg text-sm"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium">Debug Mode</span>
+                <button
+                  onClick={() => authDebugger.downloadDebugReport()}
+                  className="text-blue-600 hover:text-blue-800 text-xs"
+                >
+                  Download Debug Log
+                </button>
+              </div>
+              <p className="text-gray-600">Check browser console for detailed logs</p>
+            </motion.div>
+          )}
+
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -296,15 +389,14 @@ export default function SignupPage() {
                   type="button"
                   variant="outline"
                   className="w-full btn-outline flex items-center justify-center gap-3"
-                  onClick={() => {
-                    // Add LinkedIn OAuth later if needed
-                    setError('LinkedIn sign-up is coming soon!');
-                  }}
+                  onClick={handleLinkedInSignup}
+                  disabled={isLinkedInLoading}
+                  isLoading={isLinkedInLoading}
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
                   </svg>
-                  Continue with LinkedIn
+                  {isLinkedInLoading ? 'Connecting...' : 'Continue with LinkedIn'}
                 </Button>
               </div>
             </form>

@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,6 +35,10 @@ export default function LoginPage() {
 
       if (error) throw error;
 
+      // Check for redirectTo parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirectTo = urlParams.get('redirectTo');
+
       // Fetch user data to determine redirect
       if (data.user) {
         const { data: userData, error: userError } = await supabase
@@ -43,26 +48,52 @@ export default function LoginPage() {
           .single();
 
         if (!userError && userData) {
-          // Redirect based on user role
-          if (userData.role === 'admin') {
-            router.push('/admin/dashboard');
-          } else if (userData.role === 'creator') {
-            router.push('/creator/dashboard');
-          } else {
-            router.push('/user/dashboard');
-          }
+          // Use redirectTo if provided, otherwise redirect based on user role
+          const targetUrl = redirectTo || 
+            (userData.role === 'admin' ? '/admin/dashboard' :
+             userData.role === 'creator' ? '/creator/dashboard' :
+             '/user/dashboard');
+          
+          router.push(targetUrl);
         } else {
           // Default redirect for users without role data
-          router.push('/user/dashboard');
+          router.push(redirectTo || '/user/dashboard');
         }
       } else {
         // Fallback redirect
-        router.push('/user/dashboard');
+        router.push(redirectTo || '/user/dashboard');
       }
     } catch (err) {
       setError(formatErrorMessage(err));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleLinkedInLogin = async () => {
+    setIsLinkedInLoading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: `${window.location.origin}/auth/linkedin/callback`,
+          scopes: 'profile email openid'
+        }
+      });
+
+      if (error) {
+        console.error('LinkedIn OAuth error:', error);
+        throw error;
+      }
+
+      // The redirect will happen automatically
+      console.log('LinkedIn OAuth initiated successfully');
+    } catch (err) {
+      console.error('LinkedIn login failed:', err);
+      setError(formatErrorMessage(err));
+      setIsLinkedInLoading(false);
     }
   };
 
@@ -189,15 +220,14 @@ export default function LoginPage() {
                   type="button"
                   variant="outline"
                   className="w-full btn-outline flex items-center justify-center gap-3"
-                  onClick={() => {
-                    // Add LinkedIn OAuth later if needed
-                    setError('LinkedIn sign-in is coming soon!');
-                  }}
+                  onClick={handleLinkedInLogin}
+                  disabled={isLinkedInLoading}
+                  isLoading={isLinkedInLoading}
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
                   </svg>
-                  Continue with LinkedIn
+                  {isLinkedInLoading ? 'Connecting...' : 'Continue with LinkedIn'}
                 </Button>
               </div>
             </form>
@@ -213,7 +243,7 @@ export default function LoginPage() {
             <p className="text-gray-600">
               Don't have an account?{' '}
               <Link href="/auth/signup" className="font-semibold text-purple-600 hover:text-purple-500 transition-colors">
-                Sign up for free
+                Sign up
               </Link>
             </p>
             <div className="mt-4 pt-4 border-t border-gray-200">
