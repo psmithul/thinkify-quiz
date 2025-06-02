@@ -7,7 +7,7 @@ import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
-import { authDebugger, validateSignupData, checkEnvironmentVariables } from '@/utils/authDebug';
+import { authDebugger, validateSignupData, checkEnvironmentVariables } from '@/utils/authUtils';
 import { motion } from 'framer-motion';
 
 export default function SignupPage() {
