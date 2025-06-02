@@ -2,7 +2,7 @@
 
 import React, { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +14,7 @@ type LayoutProps = {
 export function Layout({ children }: LayoutProps) {
   const { user, userData, isAdmin, signOut } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [dbTablesExist, setDbTablesExist] = useState<boolean>(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -133,6 +134,24 @@ export function Layout({ children }: LayoutProps) {
           badgeClass: 'badge-outline'
         }
       ];
+    }
+  };
+
+  // Smart signup click handler
+  const handleSignupClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // If user is already authenticated, redirect to appropriate dashboard
+    if (user && userData) {
+      if (userData.role === 'admin') {
+        router.push('/admin/dashboard');
+      } else if (userData.role === 'creator') {
+        router.push('/creator/dashboard');
+      } else {
+        router.push('/user/dashboard');
+      }
+    } else {
+      // If not authenticated, go to signup page
+      router.push('/auth/signup');
     }
   };
 
@@ -318,12 +337,12 @@ export function Layout({ children }: LayoutProps) {
                   >
                     Login
                   </Link>
-                  <Link 
-                    href="/auth/register" 
+                  <button 
+                    onClick={handleSignupClick}
                     className="btn btn-primary text-xs sm:text-sm px-3 sm:px-6 py-1.5 sm:py-2"
                   >
                     Sign Up
-                  </Link>
+                  </button>
                 </div>
               )}
 
@@ -370,9 +389,15 @@ export function Layout({ children }: LayoutProps) {
                     <Link href="/auth/login" className="block nav-link text-sm py-2.5 px-3 rounded-lg">
                       🔑 Login
                     </Link>
-                    <Link href="/auth/register" className="block btn btn-primary text-center text-sm py-2.5">
+                    <button 
+                      onClick={(e) => {
+                        handleSignupClick(e);
+                        setMobileMenuOpen(false);
+                      }}
+                      className="block btn btn-primary text-center text-sm py-2.5 w-full"
+                    >
                       🚀 Sign Up
-                    </Link>
+                    </button>
                   </div>
                 )}
               </div>
