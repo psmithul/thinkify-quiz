@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Layout } from '@/components/Layout';
@@ -16,6 +16,83 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Check if user is already authenticated
+    async function checkCurrentUser() {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (session?.user) {
+        setCurrentUser(session.user);
+      }
+      setIsCheckingAuth(false);
+    }
+    
+    checkCurrentUser();
+  }, []);
+
+  // If user is already authenticated, show different content
+  if (currentUser && !isCheckingAuth) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-md w-full space-y-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-center"
+            >
+              <div className="flex justify-center mb-6">
+                <div className="h-16 w-16 bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <span className="text-3xl">✅</span>
+                </div>
+              </div>
+              <h2 className="heading-2 text-center">You're Already Signed In!</h2>
+              <p className="text-gray-600 text-lg mb-8">You're already authenticated with Thinkify</p>
+              
+              <div className="space-y-4">
+                <Button
+                  onClick={() => router.push('/user/dashboard')}
+                  className="w-full btn-primary"
+                >
+                  Go to Dashboard
+                </Button>
+                
+                <Button
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    window.location.reload();
+                  }}
+                  variant="outline"
+                  className="w-full btn-outline"
+                >
+                  Sign Out & Sign In as Different User
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-md w-full space-y-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Checking authentication...</p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

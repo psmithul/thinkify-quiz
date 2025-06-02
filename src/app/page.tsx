@@ -96,20 +96,6 @@ export default function HomePage() {
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 300], [0, -30]);
 
-  // Redirect logged-in users to their appropriate dashboards
-  useEffect(() => {
-    if (!authLoading && user && userData) {
-      // Redirect based on user role
-      if (userData.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (userData.role === 'creator') {
-        router.push('/creator/dashboard');
-      } else {
-        router.push('/user/dashboard');
-      }
-    }
-  }, [authLoading, user, userData, router]);
-
   // Don't render the landing page if user is logged in
   if (user && userData) {
     return (
@@ -123,6 +109,36 @@ export default function HomePage() {
       </Layout>
     );
   }
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const handleSignupClick = () => {
+    // If user is already authenticated, redirect to appropriate dashboard
+    if (user && userData) {
+      if (userData.role === 'admin') {
+        router.push('/admin/dashboard');
+      } else if (userData.role === 'creator') {
+        router.push('/creator/dashboard');
+      } else {
+        router.push('/user/dashboard');
+      }
+    } else {
+      // If not authenticated, go to signup page
+      router.push('/auth/signup');
+    }
+  };
 
   useEffect(() => {
     async function fetchStats() {
@@ -203,7 +219,7 @@ export default function HomePage() {
                 className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center mb-16 px-4"
               >
                 <Button
-                  onClick={() => router.push('/auth/signup')}
+                  onClick={handleSignupClick}
                   className="bg-blue-600 hover:bg-blue-700 text-white text-lg sm:text-xl px-8 sm:px-12 py-4 sm:py-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-semibold"
                   size="lg"
                 >
@@ -435,7 +451,7 @@ export default function HomePage() {
               
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center mb-8 sm:mb-12">
                 <Button
-                  onClick={() => router.push('/auth/signup')}
+                  onClick={handleSignupClick}
                   className="bg-white text-blue-600 hover:bg-blue-50 text-lg sm:text-xl px-8 sm:px-12 py-4 sm:py-6 rounded-xl shadow-lg font-bold transition-all duration-300 transform hover:scale-105"
                   size="lg"
                 >

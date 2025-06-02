@@ -3,10 +3,12 @@ import { Layout } from '@/components/Layout';
 import ResultsClient from './client';
 import { LoadingIndicator } from '@/components/LoadingIndicator';
 
-type Params = Promise<{ id: string }>;
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
 
 // Server Component
-export default async function QuizResultsPage({ params }: { params: Params }) {
+export default async function QuizResultsPage({ params }: PageProps) {
   const { id } = await params;
   
   return (

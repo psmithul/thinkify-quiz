@@ -34,26 +34,9 @@ export async function middleware(request: NextRequest) {
 
   // Handle authentication redirects
   if (request.nextUrl.pathname.startsWith('/auth/')) {
-    // If user is already authenticated and trying to access auth pages, redirect to dashboard
-    if (user && (request.nextUrl.pathname === '/auth/login' || request.nextUrl.pathname === '/auth/signup')) {
-      try {
-        // Get user role to determine redirect
-        const { data: userData } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-
-        const dashboardUrl = userData?.role === 'admin' ? '/admin/dashboard' :
-                            userData?.role === 'creator' ? '/creator/dashboard' :
-                            '/user/dashboard';
-
-        return NextResponse.redirect(new URL(dashboardUrl, request.url))
-      } catch (error) {
-        // If there's an error fetching user data, default to user dashboard
-        return NextResponse.redirect(new URL('/user/dashboard', request.url))
-      }
-    }
+    // Allow authenticated users to access auth pages
+    // The auth pages themselves will handle redirecting to dashboard if needed
+    // This gives users more control and prevents unexpected redirects
   }
 
   // Protect authenticated routes
