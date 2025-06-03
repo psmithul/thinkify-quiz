@@ -9,6 +9,9 @@ import { supabase, Quiz, Course, User } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import { motion } from 'framer-motion';
 
+// Force dynamic rendering to prevent SSR issues
+export const dynamic = 'force-dynamic';
+
 interface CreatorStats {
   totalQuizzes: number;
   totalCourses: number;

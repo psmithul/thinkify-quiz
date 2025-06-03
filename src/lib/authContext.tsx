@@ -6,6 +6,9 @@ import { supabase } from './supabaseClient';
 import { useRouter } from 'next/navigation';
 import { User } from '@/types/user';
 import { OnboardingGuard } from '@/components/OnboardingGuard';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { ErrorFallback } from '@/components/ErrorFallback';
+import { useLoadingTimeout } from '@/hooks/useLoadingTimeout';
 
 type AuthContextType = {
   session: Session | null;
@@ -14,6 +17,8 @@ type AuthContextType = {
   isLoading: boolean;
   isAdmin: boolean;
   isCreator: boolean;
+  error: Error | null;
+  retryAuth: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ success: boolean; redirectTo?: string }>;
   signInWithLinkedIn: () => Promise<{ success: boolean; redirectTo?: string }>;
   signUp: (email: string, password: string) => Promise<void>;
@@ -32,6 +37,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [isTabVisible, setIsTabVisible] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Loading timeout - redirect to homepage if auth takes too long
+  const { hasTimedOut } = useLoadingTimeout(isLoading, {
+    timeout: 15000, // 15 seconds for auth
+    onTimeout: () => {
+      console.warn('Auth timeout reached, redirecting to homepage');
+      setIsLoading(false);
+      setError(new Error('Authentication timeout - please try again'));
+    }
+  });
 
   // Handle tab visibility to prevent unnecessary operations when tab is inactive
   useEffect(() => {
@@ -45,76 +62,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const retryAuth = useCallback(async () => {
+    if (retryCount >= 3) {
+      setError(new Error('Maximum retry attempts reached. Please refresh the page.'));
+      return;
+    }
+
+    setRetryCount(prev => prev + 1);
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (currentSession?.user) {
+        setSession(currentSession);
+        setUser(currentSession.user);
+        await fetchUserData(currentSession.user);
+      } else {
+        setSession(null);
+        setUser(null);
+        setUserData(null);
+        setIsAdmin(false);
+        setIsCreator(false);
+        setIsLoading(false);
+      }
+    } catch (retryError) {
+      console.error('Auth retry failed:', retryError);
+      setError(retryError instanceof Error ? retryError : new Error('Auth retry failed'));
+      setIsLoading(false);
+    }
+  }, [retryCount]);
+
   const fetchUserData = useCallback(async (authUser: SupabaseUser) => {
     // Don't fetch data when tab is not visible to save resources
     if (!isTabVisible) {
       console.log('Tab not visible, skipping user data fetch');
-      setIsLoading(false); // Ensure loading is cleared
+      setIsLoading(false);
       return;
     }
 
     try {
       setIsLoading(true);
+      setError(null);
       
       console.log('Fetching user data for:', authUser.email);
-      console.log('User metadata:', authUser.user_metadata);
       
       // Add timeout to prevent hanging
-      const timeoutId = setTimeout(() => {
-        console.warn('User data fetch timeout, using basic profile');
-        const basicProfile: User = {
-          id: authUser.id,
-          email: authUser.email!,
-          full_name: extractLinkedInName(authUser) || null,
-          bio: null,
-          job_title: null,
-          location: null,
-          company: null,
-          linkedin_url: extractLinkedInUrl(authUser) || null,
-          phone: null,
-          profile_image: extractProfilePicture(authUser) || null,
-          role: 'user',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        setUserData(basicProfile);
-        setIsAdmin(false);
-        setIsCreator(false);
-        setIsLoading(false);
-      }, 5000); // 5 second timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('User data fetch timeout')), 8000);
+      });
       
       // Try to find existing user in database
-      const { data: existingUser, error: fetchError } = await supabase
+      const fetchPromise = supabase
         .from('users')
         .select('id, email, role, full_name, bio, job_title, location, company, linkedin_url, phone, profile_image, created_at, updated_at')
         .eq('id', authUser.id)
         .maybeSingle();
       
-      clearTimeout(timeoutId); // Clear timeout if successful
+      const { data: existingUser, error: fetchError } = await Promise.race([
+        fetchPromise,
+        timeoutPromise
+      ]) as any;
       
       if (fetchError) {
         console.warn('Database fetch error:', fetchError.message);
-        // Create basic profile for immediate use
-        const basicProfile: User = {
-          id: authUser.id,
-          email: authUser.email!,
-          full_name: extractLinkedInName(authUser) || null,
-          bio: null,
-          job_title: null,
-          location: null,
-          company: null,
-          linkedin_url: extractLinkedInUrl(authUser) || null,
-          phone: null,
-          profile_image: extractProfilePicture(authUser) || null,
-          role: 'user',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        setUserData(basicProfile);
-        setIsAdmin(false);
-        setIsCreator(false);
-        setIsLoading(false);
-        return;
+        throw new Error(`Database error: ${fetchError.message}`);
       }
       
       if (existingUser) {
@@ -123,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsAdmin(existingUser.role === 'admin');
         setIsCreator(existingUser.role === 'creator');
         setIsLoading(false);
+        setRetryCount(0); // Reset retry count on success
         return;
       }
       
@@ -147,34 +165,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString()
       };
       
-      const { data: createdUser, error: createError } = await supabase
+      const createPromise = supabase
         .from('users')
         .insert([newUserProfile])
         .select()
         .maybeSingle();
       
+      const { data: createdUser, error: createError } = await Promise.race([
+        createPromise,
+        timeoutPromise
+      ]) as any;
+      
       if (createError) {
         console.warn('Database create error:', createError.message);
-        // Use profile without database
+        // Use profile without database but don't throw error
         setUserData(newUserProfile);
         setIsAdmin(false);
         setIsCreator(false);
         setIsLoading(false);
+        setRetryCount(0);
         return;
       }
       
       if (createdUser) {
-        console.log('✅ User profile created in database with LinkedIn data');
+        console.log('✅ User profile created in database');
         setUserData(createdUser);
         setIsAdmin(false);
         setIsCreator(false);
         setIsLoading(false);
+        setRetryCount(0);
       }
       
     } catch (error) {
       console.error('Auth error:', error);
       
-      // Always provide a working profile
+      // Create emergency profile to prevent complete failure
       const emergencyProfile: User = {
         id: authUser.id,
         email: authUser.email || 'unknown@example.com',
@@ -195,6 +220,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(false);
       setIsCreator(false);
       setIsLoading(false);
+      
+      // Set error but don't break the app
+      if (error instanceof Error) {
+        setError(error);
+      } else {
+        setError(new Error('Failed to load user data completely'));
+      }
     }
   }, [isTabVisible]);
 
@@ -460,12 +492,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     isAdmin,
     isCreator,
+    error,
+    retryAuth,
     signIn: signInWithEmail,
     signInWithLinkedIn,
     signUp: signUpWithEmail,
     signUpWithLinkedIn,
     signOut,
   };
+
+  // Show error state if there's a critical error
+  if (error && !isLoading && !userData) {
+    return (
+      <AuthContext.Provider value={value}>
+        <ErrorFallback
+          error={error}
+          resetError={() => {
+            setError(null);
+            retryAuth();
+          }}
+          showDetails={process.env.NODE_ENV === 'development'}
+          autoRetry={false} // Manual retry only for auth errors
+          redirectDelay={20000} // 20 seconds before redirect
+        />
+      </AuthContext.Provider>
+    );
+  }
+
+  // Show loading state with timeout
+  if (isLoading && !hasTimedOut) {
+    return (
+      <AuthContext.Provider value={value}>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
+          <LoadingSpinner
+            isLoading={true}
+            message="Initializing your account..."
+            showTimeout={true}
+            timeoutDuration={15000}
+            size="lg"
+            className="min-h-screen"
+          />
+        </div>
+      </AuthContext.Provider>
+    );
+  }
+
+  // Show timeout state
+  if (hasTimedOut) {
+    return (
+      <AuthContext.Provider value={value}>
+        <ErrorFallback
+          error={new Error('Authentication is taking longer than expected')}
+          resetError={() => {
+            setError(null);
+            retryAuth();
+          }}
+          showDetails={false}
+          autoRetry={true}
+          redirectDelay={10000} // 10 seconds before redirect
+        />
+      </AuthContext.Provider>
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>

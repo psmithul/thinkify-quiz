@@ -10,6 +10,9 @@ import { formatErrorMessage } from '@/utils/errorHandler';
 import { LoadingIndicator } from '@/components/LoadingIndicator';
 import { motion } from 'framer-motion';
 
+// Force dynamic rendering to prevent SSR issues
+export const dynamic = 'force-dynamic';
+
 type Quiz = {
   id: string;
   title: string;

@@ -1,11 +1,16 @@
 'use client';
 
-import { useState } from 'react';
-import { useAuth } from '@/lib/authContext';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
-import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/authContext';
+import { supabase, User } from '@/lib/supabaseClient';
+import { formatErrorMessage } from '@/utils/errorHandler';
 import { motion } from 'framer-motion';
+
+// Force dynamic rendering to prevent SSR issues
+export const dynamic = 'force-dynamic';
 
 type ViewMode = 'admin' | 'creator' | 'user';
 

@@ -8,6 +8,9 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 
+// Force dynamic rendering to prevent SSR issues
+export const dynamic = 'force-dynamic';
+
 type QuizStats = {
   totalQuizzes: number;
   publishedQuizzes: number;

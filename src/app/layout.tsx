@@ -4,6 +4,9 @@ import "./globals.css";
 import { AuthProvider } from '@/lib/authContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
+// Force dynamic rendering globally to prevent SSR issues with client components
+export const dynamic = 'force-dynamic';
+
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],

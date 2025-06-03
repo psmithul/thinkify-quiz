@@ -6,6 +6,9 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { motion } from 'framer-motion';
 
+// Force dynamic rendering to prevent SSR issues
+export const dynamic = 'force-dynamic';
+
 export default function ContactPage() {
   const [formData, setFormData] = useState({
     name: '',
