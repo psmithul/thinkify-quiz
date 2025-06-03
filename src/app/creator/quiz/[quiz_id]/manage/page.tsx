@@ -466,7 +466,7 @@ export default function QuizManagePage() {
               📝 Edit Questions
             </Button>
             <Button
-              onClick={() => router.push(`/quiz/${quizId}`)}
+              onClick={() => router.push(`/user/quiz/${quizId}`)}
               variant="outline"
             >
               👀 Preview Quiz

@@ -209,14 +209,12 @@ export function CreatorQuizzes({ creatorId }: { creatorId: string }) {
                 
                 <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
                   <Button
-                    fullWidth
-                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(`/quiz/${quiz.id}`);
-                    }}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/user/quiz/${quiz.id}`)}
+                    className="text-xs"
                   >
-                    Take Quiz
+                    📝 Take
                   </Button>
                 </div>
               </div>

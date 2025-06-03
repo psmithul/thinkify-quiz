@@ -25,14 +25,15 @@ interface OnboardingFormData {
   phone: string;
 }
 
-// Define ALL fields as required for profile completion
-const REQUIRED_FIELDS = ['full_name', 'bio', 'job_title', 'location', 'company', 'linkedin_url', 'phone'] as const;
+// Define required fields for profile completion (LinkedIn URL removed as optional)
+const REQUIRED_FIELDS = ['full_name', 'bio', 'job_title', 'location', 'company', 'phone'] as const;
+const OPTIONAL_FIELDS = ['linkedin_url'] as const;
 
 // Helper function to check if profile is complete
 function isProfileComplete(userData: User | null): boolean {
   if (!userData) return false;
   
-  // Check ALL required fields are present and not empty
+  // Check only REQUIRED fields are present and not empty
   return REQUIRED_FIELDS.every(field => {
     const value = userData[field];
     return value && typeof value === 'string' && value.trim().length >= 2;
@@ -43,12 +44,13 @@ function isProfileComplete(userData: User | null): boolean {
 function getProfileCompletion(userData: User | null): number {
   if (!userData) return 0;
   
-  const completedFields = REQUIRED_FIELDS.filter(field => {
+  const allFields = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
+  const completedFields = allFields.filter(field => {
     const value = userData[field];
     return value && typeof value === 'string' && value.trim().length >= 2;
   });
   
-  return Math.round((completedFields.length / REQUIRED_FIELDS.length) * 100);
+  return Math.round((completedFields.length / allFields.length) * 100);
 }
 
 export function OnboardingGuard({ children }: OnboardingGuardProps) {
@@ -138,12 +140,17 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
       case 2: // Professional Info (Required)
         return formData.bio.trim().length >= 10 && 
                formData.company.trim().length >= 2;
-      case 3: // Contact Info (Required)
-        // LinkedIn URL validation (required)
-        const linkedinRegex = /^https:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9-]+\/?$/;
+      case 3: // Contact Info (Phone required, LinkedIn optional)
         const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-        return linkedinRegex.test(formData.linkedin_url.trim()) &&
-               phoneRegex.test(formData.phone.trim());
+        const phoneValid = phoneRegex.test(formData.phone.trim());
+        
+        // LinkedIn URL validation only if provided (optional)
+        if (formData.linkedin_url.trim()) {
+          const linkedinRegex = /^https:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9-]+\/?$/;
+          return phoneValid && linkedinRegex.test(formData.linkedin_url.trim());
+        }
+        
+        return phoneValid;
       default:
         return true;
     }
@@ -177,7 +184,7 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
       case 2:
         return 'Please fill in your Bio (at least 10 characters) and Company (at least 2 characters)';
       case 3:
-        return 'Please enter a valid LinkedIn URL (e.g., https://linkedin.com/in/yourname) and Phone Number';
+        return 'Please enter a valid Phone Number. LinkedIn URL is optional but must be valid if provided (e.g., https://linkedin.com/in/yourname)';
       default:
         return 'Please fill in the required information';
     }
@@ -435,26 +442,6 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        LinkedIn Profile <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        id="linkedin_url"
-                        name="linkedin_url"
-                        type="url"
-                        required
-                        value={formData.linkedin_url}
-                        onChange={handleInputChange}
-                        placeholder="https://linkedin.com/in/yourprofile"
-                        className="w-full"
-                        autoFocus
-                      />
-                      <p className="text-sm text-gray-500 mt-1">
-                        Must be a valid LinkedIn profile URL
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number <span className="text-red-500">*</span>
                       </label>
                       <Input
@@ -466,14 +453,33 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
                         onChange={handleInputChange}
                         placeholder="+1234567890"
                         className="w-full"
+                        autoFocus
                       />
                       <p className="text-sm text-gray-500 mt-1">
-                        Include country code (e.g., +1 for US)
+                        Include country code (e.g., +1 for US) - Required
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        LinkedIn Profile <span className="text-gray-400">(Optional)</span>
+                      </label>
+                      <Input
+                        id="linkedin_url"
+                        name="linkedin_url"
+                        type="url"
+                        value={formData.linkedin_url}
+                        onChange={handleInputChange}
+                        placeholder="https://linkedin.com/in/yourprofile (optional)"
+                        className="w-full"
+                      />
+                      <p className="text-sm text-gray-500 mt-1">
+                        Optional - Add this later in your profile if you prefer
                       </p>
                     </div>
                   </div>
                   <p className="text-sm text-gray-500 mt-4">
-                    Contact information is required for important notifications and professional networking
+                    Phone number is required for important notifications. LinkedIn profile is optional for professional networking.
                   </p>
                 </div>
               )}
