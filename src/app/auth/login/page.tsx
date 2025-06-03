@@ -1,144 +1,35 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
-import { supabase } from '@/lib/supabaseClient';
+import { Input } from '@/components/Input';
+import { useAuth } from '@/lib/authContext';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { signIn, signInWithLinkedIn } = useAuth();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-
-  useEffect(() => {
-    // Check if user is already authenticated
-    async function checkCurrentUser() {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (session?.user) {
-        setCurrentUser(session.user);
-      }
-      setIsCheckingAuth(false);
-    }
-    
-    checkCurrentUser();
-  }, []);
-
-  // If user is already authenticated, show different content
-  if (currentUser && !isCheckingAuth) {
-    return (
-      <Layout>
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-md w-full space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-center"
-            >
-              <div className="flex justify-center mb-6">
-                <div className="h-16 w-16 bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <span className="text-3xl">✅</span>
-                </div>
-              </div>
-              <h2 className="heading-2 text-center">You're Already Signed In!</h2>
-              <p className="text-gray-600 text-lg mb-8">You're already authenticated with Thinkify</p>
-              
-              <div className="space-y-4">
-                <Button
-                  onClick={() => router.push('/user/dashboard')}
-                  className="w-full btn-primary"
-                >
-                  Go to Dashboard
-                </Button>
-                
-                <Button
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    window.location.reload();
-                  }}
-                  variant="outline"
-                  className="w-full btn-outline"
-                >
-                  Sign Out & Sign In as Different User
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  // Show loading while checking authentication
-  if (isCheckingAuth) {
-    return (
-      <Layout>
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-md w-full space-y-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Checking authentication...</p>
-            </div>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      // Check for redirectTo parameter
-      const urlParams = new URLSearchParams(window.location.search);
-      const redirectTo = urlParams.get('redirectTo');
-
-      // Fetch user data to determine redirect
-      if (data.user) {
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('role, full_name')
-          .eq('id', data.user.id)
-          .single();
-
-        if (!userError && userData) {
-          // Use redirectTo if provided, otherwise redirect based on user role
-          const targetUrl = redirectTo || 
-            (userData.role === 'admin' ? '/admin/dashboard' :
-             userData.role === 'creator' ? '/creator/dashboard' :
-             '/user/dashboard');
-          
-          router.push(targetUrl);
-        } else {
-          // Default redirect for users without role data
-          router.push(redirectTo || '/user/dashboard');
-        }
-      } else {
-        // Fallback redirect
-        router.push(redirectTo || '/user/dashboard');
+      const result = await signIn(formData.email, formData.password);
+      if (result.success) {
+        router.push(result.redirectTo || '/user/dashboard');
       }
     } catch (err) {
       setError(formatErrorMessage(err));
@@ -152,187 +43,141 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'linkedin_oidc',
-        options: {
-          redirectTo: `${window.location.origin}/auth/linkedin/callback`,
-          scopes: 'profile email openid'
-        }
-      });
-
-      if (error) {
-        console.error('LinkedIn OAuth error:', error);
-        throw error;
-      }
-
-      // The redirect will happen automatically
-      console.log('LinkedIn OAuth initiated successfully');
+      await signInWithLinkedIn();
+      // OAuth redirect will handle the rest
     } catch (err) {
-      console.error('LinkedIn login failed:', err);
       setError(formatErrorMessage(err));
       setIsLinkedInLoading(false);
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
-            <div className="flex justify-center mb-6">
-              <div className="h-16 w-16 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-3xl">🧠</span>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-md w-full space-y-8"
+        >
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 p-8">
+            <div className="text-center">
+              <div className="flex justify-center mb-6">
+                <div className="h-16 w-16 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <span className="text-3xl">🚀</span>
+                </div>
               </div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h2>
+              <p className="text-gray-600 mb-8">
+                Sign in to your account to continue your learning journey
+              </p>
             </div>
-            <h2 className="heading-2 text-center">Welcome back!</h2>
-            <p className="text-gray-600 text-lg">Sign in to your Thinkify account</p>
-          </motion.div>
 
-          {/* Form */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="form-container"
-          >
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="status-error"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">❌</span>
-                    <div>
-                      <p className="font-semibold">Sign In Failed</p>
-                      <p className="text-sm mt-1">{error}</p>
-                    </div>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">❌</span>
+                  <div>
+                    <p className="font-semibold text-red-900">Sign in failed</p>
+                    <p className="text-sm text-red-700 mt-1">{error}</p>
                   </div>
-                </motion.div>
-              )}
+                </div>
+              </motion.div>
+            )}
 
-              <div className="form-group">
-                <label htmlFor="email" className="form-label required">
-                  Email Address
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Email address
                 </label>
-                <input
+                <Input
                   id="email"
                   name="email"
                   type="email"
-                  autoComplete="email"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="form-input"
-                  placeholder="Enter your email address"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="Enter your email"
+                  className="w-full"
                 />
               </div>
 
-              <div className="form-group">
-                <label htmlFor="password" className="form-label required">
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                   Password
                 </label>
-                <input
+                <Input
                   id="password"
                   name="password"
                   type="password"
-                  autoComplete="current-password"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="form-input"
+                  value={formData.password}
+                  onChange={handleInputChange}
                   placeholder="Enter your password"
+                  className="w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                    Remember me
-                  </label>
-                </div>
+              <Button
+                type="submit"
+                disabled={isLoading || isLinkedInLoading}
+                isLoading={isLoading}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200"
+              >
+                Sign in
+              </Button>
+            </form>
 
-                <div className="text-sm">
-                  <Link href="/auth/forgot-password" className="font-medium text-purple-600 hover:text-purple-500">
-                    Forgot your password?
-                  </Link>
-                </div>
-              </div>
-
-              <div>
-                <Button
-                  type="submit"
-                  disabled={isLoading || !email || !password}
-                  className="w-full btn-primary"
-                  isLoading={isLoading}
-                >
-                  {isLoading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </div>
-
+            {/* Divider */}
+            <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200" />
+                  <div className="w-full border-t border-gray-300" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white text-gray-500">Or continue with</span>
+                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
                 </div>
               </div>
+            </div>
 
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full btn-outline flex items-center justify-center gap-3"
-                  onClick={handleLinkedInLogin}
-                  disabled={isLinkedInLoading}
-                  isLoading={isLinkedInLoading}
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                  </svg>
-                  {isLinkedInLoading ? 'Connecting...' : 'Continue with LinkedIn'}
-                </Button>
-              </div>
-            </form>
-          </motion.div>
+            {/* LinkedIn OAuth Button */}
+            <div className="mt-6">
+              <Button
+                type="button"
+                onClick={handleLinkedInLogin}
+                disabled={isLoading || isLinkedInLoading}
+                isLoading={isLinkedInLoading}
+                className="w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.338 16.338H13.67V12.16c0-.995-.017-2.277-1.387-2.277-1.39 0-1.601 1.086-1.601 2.207v4.248H8.014v-8.59h2.559v1.174h.037c.356-.675 1.227-1.387 2.526-1.387 2.703 0 3.203 1.778 3.203 4.092v4.711zM5.005 6.575a1.548 1.548 0 11-.003-3.096 1.548 1.548 0 01.003 3.096zm-1.337 9.763H6.34v-8.59H3.667v8.59zM17.668 1H2.328C1.595 1 1 1.581 1 2.298v15.403C1 18.418 1.595 19 2.328 19h15.34c.734 0 1.332-.582 1.332-1.299V2.298C19 1.581 18.402 1 17.668 1z" clipRule="evenodd" />
+                </svg>
+                {isLinkedInLoading ? 'Connecting...' : 'Continue with LinkedIn'}
+              </Button>
+            </div>
 
-          {/* Footer */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="text-center"
-          >
-            <p className="text-gray-600">
-              Don't have an account?{' '}
-              <Link href="/auth/signup" className="font-semibold text-purple-600 hover:text-purple-500 transition-colors">
-                Sign up
-              </Link>
-            </p>
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
-                Want to create content?{' '}
-                <Link href="/make-me-creator" className="font-medium text-indigo-600 hover:text-indigo-500">
-                  Become a Creator
+            <div className="mt-8 text-center">
+              <p className="text-gray-600">
+                Don't have an account?{' '}
+                <Link href="/auth/signup" className="font-semibold text-purple-600 hover:text-purple-500 transition-colors">
+                  Sign up
                 </Link>
               </p>
             </div>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
       </div>
     </Layout>
   );

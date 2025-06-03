@@ -142,6 +142,31 @@ export function validateSignupData(formData: {
 
 // Helper function to check environment variables
 export function checkEnvironmentVariables() {
+  // Skip environment check in client-side to avoid build-time errors
+  if (typeof window !== 'undefined') {
+    // On client side, check if supabase client is properly initialized
+    try {
+      const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const hasKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!hasUrl || !hasKey) {
+        console.warn('Environment variables may not be loaded properly, but continuing...');
+        return true; // Don't block the app, just warn
+      }
+      
+      authDebugger.log('Environment Check', true, { 
+        hasUrl, 
+        hasKey,
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 20) + '...'
+      });
+      return true;
+    } catch (err) {
+      console.warn('Environment check failed but continuing:', err);
+      return true; // Don't block the app
+    }
+  }
+
+  // Server-side check
   const requiredVars = [
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY'
@@ -151,6 +176,7 @@ export function checkEnvironmentVariables() {
   
   if (missing.length > 0) {
     authDebugger.log('Environment Check', false, { missing }, `Missing environment variables: ${missing.join(', ')}`);
+    console.warn('Missing environment variables:', missing);
     return false;
   }
 

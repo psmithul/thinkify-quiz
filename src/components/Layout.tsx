@@ -267,12 +267,48 @@ export function Layout({ children }: LayoutProps) {
                           }}
                         >
                           <div className="p-3 sm:p-4 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-                            <p className="font-semibold text-gray-900 line-clamp-1 text-sm break-all">{userData?.email}</p>
-                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isAdmin ? 'bg-red-100 text-red-800' : isCreator ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
-                                {userData?.role?.toUpperCase()}
-                              </span>
-                            </p>
+                            <div className="flex items-start gap-3">
+                              {userData?.profile_image ? (
+                                <img
+                                  className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover ring-2 ring-purple-200 shadow-sm flex-shrink-0"
+                                  src={userData.profile_image}
+                                  alt={userData.full_name || 'User'}
+                                />
+                              ) : (
+                                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold ring-2 ring-purple-200 shadow-sm text-lg flex-shrink-0">
+                                  {(userData?.full_name?.[0] || userData?.email?.[0] || '?').toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 text-sm truncate">
+                                  {userData?.full_name || userData?.email?.split('@')[0] || 'User'}
+                                </p>
+                                <p className="text-xs text-gray-600 truncate mb-1">
+                                  {userData?.email}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isAdmin ? 'bg-red-100 text-red-800' : isCreator ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
+                                    {userData?.role?.toUpperCase()}
+                                  </span>
+                                  {userData?.linkedin_url && (
+                                    <a
+                                      href={userData.linkedin_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                                      title="View LinkedIn Profile"
+                                    >
+                                      LinkedIn
+                                    </a>
+                                  )}
+                                </div>
+                                {userData?.phone && (
+                                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                    📞 {userData.phone}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
                           {/* Mobile menu items */}

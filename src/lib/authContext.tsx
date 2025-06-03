@@ -1,11 +1,11 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { Session, User as SupabaseUser, AuthError } from '@supabase/supabase-js';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 import { useRouter } from 'next/navigation';
-import { ProfileCompletionGuard } from '@/components/ProfileCompletionGuard';
 import { User } from '@/types/user';
+import { OnboardingGuard } from '@/components/OnboardingGuard';
 
 type AuthContextType = {
   session: Session | null;
@@ -15,7 +15,9 @@ type AuthContextType = {
   isAdmin: boolean;
   isCreator: boolean;
   signIn: (email: string, password: string) => Promise<{ success: boolean; redirectTo?: string }>;
+  signInWithLinkedIn: () => Promise<{ success: boolean; redirectTo?: string }>;
   signUp: (email: string, password: string) => Promise<void>;
+  signUpWithLinkedIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -30,26 +32,223 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      } else {
+  const fetchUserData = useCallback(async (authUser: SupabaseUser) => {
+    try {
+      setIsLoading(true);
+      
+      console.log('Fetching user data for:', authUser.email);
+      console.log('User metadata:', authUser.user_metadata);
+      
+      // Try to find existing user in database
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('users')
+        .select('id, email, role, full_name, bio, job_title, location, company, linkedin_url, phone, profile_image, created_at, updated_at')
+        .eq('id', authUser.id)
+        .maybeSingle();
+      
+      if (fetchError) {
+        console.warn('Database fetch error:', fetchError.message);
+        // Create basic profile for immediate use
+        const basicProfile: User = {
+          id: authUser.id,
+          email: authUser.email!,
+          full_name: extractLinkedInName(authUser) || null,
+          bio: null,
+          job_title: null,
+          location: null,
+          company: null,
+          linkedin_url: extractLinkedInUrl(authUser) || null,
+          phone: null,
+          profile_image: extractProfilePicture(authUser) || null,
+          role: 'user',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        setUserData(basicProfile);
+        setIsAdmin(false);
+        setIsCreator(false);
+        setIsLoading(false);
+        return;
+      }
+      
+      if (existingUser) {
+        console.log('✅ Found existing user in database');
+        setUserData(existingUser);
+        setIsAdmin(existingUser.role === 'admin');
+        setIsCreator(existingUser.role === 'creator');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Create new user profile with LinkedIn data if available
+      const linkedInName = extractLinkedInName(authUser);
+      const linkedInUrl = extractLinkedInUrl(authUser);
+      const profilePicture = extractProfilePicture(authUser);
+      
+      const newUserProfile = {
+        id: authUser.id,
+        email: authUser.email!,
+        full_name: linkedInName || null,
+        bio: null,
+        job_title: null,
+        location: null,
+        company: null,
+        linkedin_url: linkedInUrl || null,
+        phone: null,
+        profile_image: profilePicture || null,
+        role: 'user' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { data: createdUser, error: createError } = await supabase
+        .from('users')
+        .insert([newUserProfile])
+        .select()
+        .maybeSingle();
+      
+      if (createError) {
+        console.warn('Database create error:', createError.message);
+        // Use profile without database
+        setUserData(newUserProfile);
+        setIsAdmin(false);
+        setIsCreator(false);
+        setIsLoading(false);
+        return;
+      }
+      
+      if (createdUser) {
+        console.log('✅ User profile created in database with LinkedIn data');
+        setUserData(createdUser);
+        setIsAdmin(false);
+        setIsCreator(false);
         setIsLoading(false);
       }
-    });
+      
+    } catch (error) {
+      console.error('Auth error:', error);
+      
+      // Always provide a working profile
+      const emergencyProfile: User = {
+        id: authUser.id,
+        email: authUser.email || 'unknown@example.com',
+        full_name: extractLinkedInName(authUser) || null,
+        bio: null,
+        job_title: null,
+        location: null,
+        company: null,
+        linkedin_url: extractLinkedInUrl(authUser) || null,
+        phone: null,
+        profile_image: extractProfilePicture(authUser) || null,
+        role: 'user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      setUserData(emergencyProfile);
+      setIsAdmin(false);
+      setIsCreator(false);
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Helper functions to extract LinkedIn data (OpenID Connect format)
+  const extractLinkedInName = (user: SupabaseUser): string | null => {
+    // OpenID Connect format provides 'name', 'given_name', 'family_name'
+    if (user.user_metadata?.name) {
+      return user.user_metadata.name;
+    }
+    if (user.user_metadata?.given_name && user.user_metadata?.family_name) {
+      return `${user.user_metadata.given_name} ${user.user_metadata.family_name}`;
+    }
+    // Fallback to legacy format if present
+    if (user.user_metadata?.full_name) {
+      return user.user_metadata.full_name;
+    }
+    if (user.user_metadata?.first_name && user.user_metadata?.last_name) {
+      return `${user.user_metadata.first_name} ${user.user_metadata.last_name}`;
+    }
+    return null;
+  };
+
+  const extractLinkedInUrl = (user: SupabaseUser): string | null => {
+    // Try to get LinkedIn profile URL from metadata
+    if (user.user_metadata?.linkedin_url) {
+      return user.user_metadata.linkedin_url;
+    }
+    if (user.user_metadata?.profile_url) {
+      return user.user_metadata.profile_url;
+    }
+    // OpenID Connect provides 'sub' as the unique identifier
+    // We can try to construct a LinkedIn URL, but this may not always work
+    if (user.user_metadata?.sub) {
+      const sub = user.user_metadata.sub;
+      if (typeof sub === 'string' && sub.length > 0) {
+        // Note: This may not work for all LinkedIn accounts
+        // LinkedIn doesn't always provide the profile URL directly
+        return null; // Better to leave empty than guess incorrectly
+      }
+    }
+    return null;
+  };
+
+  const extractProfilePicture = (user: SupabaseUser): string | null => {
+    // OpenID Connect provides 'picture' field
+    if (user.user_metadata?.picture) {
+      return user.user_metadata.picture;
+    }
+    if (user.user_metadata?.avatar_url) {
+      return user.user_metadata.avatar_url;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!mounted) return;
+        
+        if (error) {
+          console.error('Initial session error:', error);
+          setIsLoading(false);
+          return;
+        }
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await fetchUserData(session.user);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error('Session initialization error:', error);
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    getInitialSession();
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      console.log('Auth state change:', event, session?.user?.email);
+      
       setSession(session);
       setUser(session?.user ?? null);
+      
       if (session?.user) {
-        fetchUserData(session.user.id);
+        await fetchUserData(session.user);
       } else {
         setUserData(null);
         setIsAdmin(false);
@@ -58,199 +257,123 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchUserData = useCallback(async (userId: string) => {
-    try {
-      setIsLoading(true);
-      
-      // Query to get complete user data including LinkedIn fields
-      const { data, error } = await supabase
-        .from('users')
-        .select('*') // Fetch all fields including LinkedIn data
-        .eq('id', userId)
-        .maybeSingle(); // Use maybeSingle instead of single to handle no results gracefully
-
-      console.log('Fetched user data:', data);
-
-      if (error) {
-        console.warn('Error fetching user data:', error);
-        
-        // If user doesn't exist, try to create one with basic info
-        if (error.code === 'PGRST116' || error.details?.includes('0 rows')) {
-          try {
-            const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
-            const userName = user?.user_metadata?.full_name || session?.user?.user_metadata?.full_name || '';
-            
-            console.log('Creating new user with email:', userEmail, 'name:', userName);
-            console.log('User metadata available:', user?.user_metadata);
-            
-            const newUserData = {
-              id: userId,
-              email: userEmail,
-              full_name: userName && userName.trim().length >= 2 ? userName.trim() : '', // Ensure empty if invalid
-              role: 'user'
-            };
-            
-            console.log('Inserting new user data:', newUserData);
-            
-            const { data: newUserData_result, error: insertError } = await supabase
-              .from('users')
-              .insert([newUserData])
-              .select('*') // Fetch all fields
-              .single();
-
-            if (!insertError && newUserData_result) {
-              console.log('Created new user:', newUserData_result);
-              setUserData(newUserData_result as User);
-              setIsAdmin(newUserData_result.role === 'admin');
-              setIsCreator(newUserData_result.role === 'creator');
-            } else {
-              console.warn('Failed to create user profile:', insertError);
-              // Set minimal user data from auth session
-              setUserData({
-                id: userId,
-                email: userEmail,
-                full_name: userName || userEmail.split('@')[0],
-                role: 'user'
-              } as User);
-            }
-          } catch (createError) {
-            console.warn('Error creating user profile:', createError);
-            // Fallback: create minimal user data from session
-            const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
-            setUserData({
-              id: userId,
-              email: userEmail,
-              full_name: userEmail.split('@')[0],
-              role: 'user'
-            } as User);
-          }
-        }
-      } else if (data) {
-        console.log('Setting user data:', data);
-        setUserData(data as User);
-        setIsAdmin(data.role === 'admin');
-        setIsCreator(data.role === 'creator');
-      } else {
-        // No user data found, create minimal profile
-        const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
-        const userName = user?.user_metadata?.full_name || session?.user?.user_metadata?.full_name || '';
-        
-        console.log('No user data found, creating minimal profile');
-        setUserData({
-          id: userId,
-          email: userEmail,
-          full_name: userName || userEmail.split('@')[0],
-          role: 'user'
-        } as User);
-      }
-    } catch (error) {
-      console.warn('Unexpected error in fetchUserData:', error);
-      // Fallback: create basic user data from auth session
-      const userEmail = user?.email || session?.user?.email || 'unknown@example.com';
-      setUserData({
-        id: userId,
-        email: userEmail,
-        full_name: userEmail.split('@')[0],
-        role: 'user'
-      } as User);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, session]);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [fetchUserData]);
 
   const signInWithEmail = async (email: string, password: string): Promise<{ success: boolean; redirectTo?: string }> => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if (error) {
+        // Provide better error messages for common issues
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password. Please check your credentials and try again.');
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error('Please check your email and click the confirmation link before signing in.');
+        } else if (error.message.includes('too_many_requests')) {
+          throw new Error('Too many login attempts. Please wait a moment and try again.');
+        }
+        throw error;
+      }
 
-      // Fetch user data to determine redirect
+      // Ensure user exists in our database
       if (data.user) {
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('role, full_name')
           .eq('id', data.user.id)
-          .single();
+          .maybeSingle();
 
-        if (!userError && userData) {
-          // Determine redirect path based on role
-          let redirectTo = '/user/dashboard'; // default
-          
-          if (userData.role === 'admin') {
-            redirectTo = '/admin/dashboard';
-          } else if (userData.role === 'creator') {
-            redirectTo = '/creator/dashboard';
-          }
-          
+        if (userError) {
+          console.warn('Error fetching user data:', userError);
+          // Still allow login, user data will be created automatically
+        }
+
+        if (userData) {
+          const redirectTo = userData.role === 'admin' ? '/admin/dashboard' : 
+                           userData.role === 'creator' ? '/creator/dashboard' : 
+                           '/user/dashboard';
           return { success: true, redirectTo };
         }
       }
       
       return { success: true, redirectTo: '/user/dashboard' };
     } catch (error: any) {
-      // If error is 400 and the table doesn't exist, we'll provide a helpful error
-      if (error.status === 400) {
-        throw new Error('Failed to sign in. Please make sure the database is properly set up by running "npm run init-db".');
-      }
+      console.error('Sign in error:', error);
+      throw error;
+    }
+  };
+
+  const signInWithLinkedIn = async (): Promise<{ success: boolean; redirectTo?: string }> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          scopes: 'openid profile email'
+        }
+      });
+
+      if (error) throw error;
+
+      // OAuth redirect will handle the rest
+      return { success: true };
+    } catch (error: any) {
+      console.error('LinkedIn sign in error:', error);
       throw error;
     }
   };
 
   const signUpWithEmail = async (email: string, password: string) => {
-    // This function is now deprecated in favor of direct Supabase auth in the signup form
-    // to allow users to choose their role, but we keep it for backward compatibility
     try {
       const { error, data } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
-      // Create user entry in users table
-      if (data?.user) {
-        try {
-          const { error: userError } = await supabase.from('users').insert([
-            { id: data.user.id, email, role: 'user' }
-          ]);
-          
-          if (userError) {
-            // If table doesn't exist, provide a helpful error
-            if (userError.code === '42P01') {
-              throw new Error('Users table does not exist. Please run "npm run init-db" to set up the database.');
-            }
-            throw userError;
-          }
-        } catch (err) {
-          throw err;
-        }
-      }
+      // User profile will be created automatically by the auth listener
+      console.log('User signed up, profile will be created automatically');
     } catch (error: any) {
-      // If rate limited, provide a helpful message
-      if (error.status === 429) {
-        throw new Error('Too many signup attempts. Please try again later.');
-      }
+      throw error;
+    }
+  };
+
+  const signUpWithLinkedIn = async (): Promise<void> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          scopes: 'openid profile email'
+        }
+      });
+
+      if (error) throw error;
+
+      // OAuth redirect will handle the rest
+      console.log('LinkedIn OAuth initiated for signup');
+    } catch (error: any) {
+      console.error('LinkedIn sign up error:', error);
       throw error;
     }
   };
 
   const signOut = async () => {
     try {
-      // First clear local state
       setUser(null);
       setUserData(null);
       setSession(null);
       setIsAdmin(false);
       setIsCreator(false);
       
-      // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      // Force navigation to home page only in browser
       if (typeof window !== 'undefined') {
         window.location.href = '/';
       }
     } catch (error) {
-      // Handle sign out error silently in production
+      console.error('Sign out error:', error);
     }
   };
 
@@ -262,15 +385,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isCreator,
     signIn: signInWithEmail,
+    signInWithLinkedIn,
     signUp: signUpWithEmail,
+    signUpWithLinkedIn,
     signOut,
   };
 
   return (
     <AuthContext.Provider value={value}>
-      <ProfileCompletionGuard>
+      <OnboardingGuard>
         {children}
-      </ProfileCompletionGuard>
+      </OnboardingGuard>
     </AuthContext.Provider>
   );
 }

@@ -96,50 +96,7 @@ export default function HomePage() {
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 300], [0, -30]);
 
-  // Don't render the landing page if user is logged in
-  if (user && userData) {
-    return (
-      <Layout>
-        <div className="min-h-screen bg-white flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Redirecting to your dashboard...</p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return (
-      <Layout>
-        <div className="min-h-screen bg-white flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading...</p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  const handleSignupClick = () => {
-    // If user is already authenticated, redirect to appropriate dashboard
-    if (user && userData) {
-      if (userData.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (userData.role === 'creator') {
-        router.push('/creator/dashboard');
-      } else {
-        router.push('/user/dashboard');
-      }
-    } else {
-      // If not authenticated, go to signup page
-      router.push('/auth/signup');
-    }
-  };
-
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   useEffect(() => {
     // Redirect authenticated users to their dashboard
     if (user && userData && !authLoading) {
@@ -178,6 +135,38 @@ export default function HomePage() {
       fetchStats();
     }
   }, [user, authLoading]);
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Redirect authenticated users (this will trigger the useEffect redirect)
+  if (user && userData) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Redirecting to your dashboard...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const handleSignupClick = () => {
+    router.push('/auth/signup');
+  };
 
   return (
     <Layout>
