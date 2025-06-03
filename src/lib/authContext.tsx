@@ -31,13 +31,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
+  const [isTabVisible, setIsTabVisible] = useState(true);
+
+  // Handle tab visibility to prevent unnecessary operations when tab is inactive
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsTabVisible(!document.hidden);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const fetchUserData = useCallback(async (authUser: SupabaseUser) => {
+    // Don't fetch data when tab is not visible to save resources
+    if (!isTabVisible) {
+      console.log('Tab not visible, skipping user data fetch');
+      setIsLoading(false); // Ensure loading is cleared
+      return;
+    }
+
     try {
       setIsLoading(true);
       
       console.log('Fetching user data for:', authUser.email);
       console.log('User metadata:', authUser.user_metadata);
+      
+      // Add timeout to prevent hanging
+      const timeoutId = setTimeout(() => {
+        console.warn('User data fetch timeout, using basic profile');
+        const basicProfile: User = {
+          id: authUser.id,
+          email: authUser.email!,
+          full_name: extractLinkedInName(authUser) || null,
+          bio: null,
+          job_title: null,
+          location: null,
+          company: null,
+          linkedin_url: extractLinkedInUrl(authUser) || null,
+          phone: null,
+          profile_image: extractProfilePicture(authUser) || null,
+          role: 'user',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        setUserData(basicProfile);
+        setIsAdmin(false);
+        setIsCreator(false);
+        setIsLoading(false);
+      }, 5000); // 5 second timeout
       
       // Try to find existing user in database
       const { data: existingUser, error: fetchError } = await supabase
@@ -45,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select('id, email, role, full_name, bio, job_title, location, company, linkedin_url, phone, profile_image, created_at, updated_at')
         .eq('id', authUser.id)
         .maybeSingle();
+      
+      clearTimeout(timeoutId); // Clear timeout if successful
       
       if (fetchError) {
         console.warn('Database fetch error:', fetchError.message);
@@ -150,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsCreator(false);
       setIsLoading(false);
     }
-  }, []);
+  }, [isTabVisible]);
 
   // Helper functions to extract LinkedIn data (OpenID Connect format)
   const extractLinkedInName = (user: SupabaseUser): string | null => {
@@ -205,15 +251,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let initializationTimeout: NodeJS.Timeout;
     
     // Get initial session
     const getInitialSession = async () => {
       try {
+        console.log('Getting initial session, tab visible:', isTabVisible);
+        
+        // Set a fallback timeout to ensure loading never hangs forever
+        initializationTimeout = setTimeout(() => {
+          if (mounted) {
+            console.warn('Session initialization timeout, clearing loading state');
+            setIsLoading(false);
+          }
+        }, 10000); // 10 second timeout
+
         const { data: { session }, error } = await supabase.auth.getSession();
         if (!mounted) return;
         
         if (error) {
           console.error('Initial session error:', error);
+          clearTimeout(initializationTimeout);
           setIsLoading(false);
           return;
         }
@@ -221,20 +279,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         
-        if (session?.user) {
+        if (session?.user && isTabVisible) {
           await fetchUserData(session.user);
         } else {
+          clearTimeout(initializationTimeout);
           setIsLoading(false);
         }
       } catch (error) {
         console.error('Session initialization error:', error);
         if (mounted) {
+          clearTimeout(initializationTimeout);
           setIsLoading(false);
         }
       }
     };
 
-    getInitialSession();
+    // Only initialize when tab is visible or on first load
+    if (isTabVisible || !user) {
+      getInitialSession();
+    } else {
+      // If tab becomes hidden and we already have a user, just clear loading
+      setIsLoading(false);
+    }
 
     // Listen for auth changes
     const {
@@ -242,12 +308,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
-      console.log('Auth state change:', event, session?.user?.email);
+      console.log('Auth state change:', event, session?.user?.email, 'tab visible:', isTabVisible);
       
       setSession(session);
       setUser(session?.user ?? null);
       
-      if (session?.user) {
+      if (session?.user && isTabVisible) {
         await fetchUserData(session.user);
       } else {
         setUserData(null);
@@ -259,9 +325,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      clearTimeout(initializationTimeout);
       subscription.unsubscribe();
     };
-  }, [fetchUserData]);
+  }, [isTabVisible]); // Remove fetchUserData dependency to prevent infinite loops
+
+  // Handle tab visibility changes - refresh data when tab becomes visible again
+  useEffect(() => {
+    if (isTabVisible && user && !userData && !isLoading) {
+      console.log('Tab became visible, refreshing user data');
+      fetchUserData(user);
+    }
+  }, [isTabVisible, user, userData, isLoading, fetchUserData]);
 
   const signInWithEmail = async (email: string, password: string): Promise<{ success: boolean; redirectTo?: string }> => {
     try {
@@ -370,7 +445,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       
       if (typeof window !== 'undefined') {
-        window.location.href = '/';
+        // Use replace to prevent back button issues
+        window.location.replace('/');
       }
     } catch (error) {
       console.error('Sign out error:', error);

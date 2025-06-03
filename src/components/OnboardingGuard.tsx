@@ -62,6 +62,7 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
   const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
+  const [isTabVisible, setIsTabVisible] = useState(true);
   
   const [formData, setFormData] = useState<OnboardingFormData>({
     full_name: '',
@@ -73,55 +74,101 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
     phone: ''
   });
 
-  // Check if user needs onboarding
+  // Handle tab visibility to prevent unnecessary operations when tab is inactive
   useEffect(() => {
-    if (!authLoading && user && userData && !hasCheckedOnboarding) {
-      const needsOnboarding = !isProfileComplete(userData);
-      const completionPercentage = getProfileCompletion(userData);
-      
-      console.log('Profile completion check:', {
-        userId: user.id,
-        email: user.email,
-        fullName: userData.full_name,
-        jobTitle: userData.job_title,
-        location: userData.location,
-        bio: userData.bio,
-        company: userData.company,
-        linkedinUrl: userData.linkedin_url,
-        phone: userData.phone,
-        isComplete: isProfileComplete(userData),
-        completionPercentage,
-        needsOnboarding,
-        hasChecked: hasCheckedOnboarding
-      });
-      
-      if (needsOnboarding) {
-        setShowOnboarding(true);
-        // Pre-fill with any existing data
-        setFormData(prev => ({
-          ...prev,
-          full_name: userData.full_name || '',
-          bio: userData.bio || '',
-          job_title: userData.job_title || '',
-          location: userData.location || '',
-          company: userData.company || '',
-          linkedin_url: userData.linkedin_url || '',
-          phone: userData.phone || ''
-        }));
-      } else {
-        setShowOnboarding(false);
-        console.log('✅ Profile is complete, allowing app access');
-      }
-      
-      setHasCheckedOnboarding(true);
+    const handleVisibilityChange = () => {
+      setIsTabVisible(!document.hidden);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Check if user needs onboarding - FIXED: Removed hasCheckedOnboarding from dependencies to prevent infinite loop
+  useEffect(() => {
+    // Only run when tab is visible and we have user data
+    if (!isTabVisible || authLoading || !user) {
+      return;
     }
-    
-    // Reset check flag when user changes
+
+    // Prevent multiple checks
+    if (hasCheckedOnboarding) {
+      return;
+    }
+
+    const checkOnboardingNeeded = () => {
+      // Set a timeout to prevent hanging
+      const timeoutId = setTimeout(() => {
+        console.warn('Onboarding check timeout, allowing access');
+        setHasCheckedOnboarding(true);
+        setShowOnboarding(false);
+      }, 3000); // 3 second timeout
+
+      try {
+        if (!userData) {
+          clearTimeout(timeoutId);
+          setHasCheckedOnboarding(true);
+          return;
+        }
+
+        const needsOnboarding = !isProfileComplete(userData);
+        const completionPercentage = getProfileCompletion(userData);
+        
+        console.log('Profile completion check:', {
+          userId: user.id,
+          email: user.email,
+          fullName: userData.full_name,
+          jobTitle: userData.job_title,
+          location: userData.location,
+          bio: userData.bio,
+          company: userData.company,
+          linkedinUrl: userData.linkedin_url,
+          phone: userData.phone,
+          isComplete: isProfileComplete(userData),
+          completionPercentage,
+          needsOnboarding
+        });
+        
+        if (needsOnboarding) {
+          setShowOnboarding(true);
+          // Pre-fill with any existing data
+          setFormData(prev => ({
+            ...prev,
+            full_name: userData.full_name || '',
+            bio: userData.bio || '',
+            job_title: userData.job_title || '',
+            location: userData.location || '',
+            company: userData.company || '',
+            linkedin_url: userData.linkedin_url || '',
+            phone: userData.phone || ''
+          }));
+        } else {
+          setShowOnboarding(false);
+          console.log('✅ Profile is complete, allowing app access');
+        }
+        
+        clearTimeout(timeoutId);
+        setHasCheckedOnboarding(true);
+      } catch (error) {
+        console.error('Error checking onboarding:', error);
+        clearTimeout(timeoutId);
+        setHasCheckedOnboarding(true);
+        setShowOnboarding(false);
+      }
+    };
+
+    checkOnboardingNeeded();
+  }, [user, userData, authLoading, isTabVisible]); // Removed hasCheckedOnboarding from dependencies
+
+  // Reset check flag when user changes
+  useEffect(() => {
     if (!user) {
       setHasCheckedOnboarding(false);
       setShowOnboarding(false);
     }
-  }, [user, userData, authLoading, hasCheckedOnboarding]);
+  }, [user?.id]); // Only trigger when user ID changes
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -230,12 +277,14 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
 
       console.log('✅ Profile completed successfully:', updatedUser);
       
-      // Hide onboarding
+      // Hide onboarding and reset state properly
       setShowOnboarding(false);
       setHasCheckedOnboarding(false);
       
-      // Force auth context to refetch user data
-      window.location.reload();
+      // Force a clean re-check of profile completion
+      setTimeout(() => {
+        window.location.href = window.location.pathname;
+      }, 100);
       
     } catch (err) {
       console.error('Onboarding error:', err);
