@@ -65,3 +65,8 @@ chrome-extension/images/temp/
 # Database backup files
 *.sql.backup
 *.db.backup
+# Exclude large image files
+Triplebyte SS/
+*.jpg
+*.png
+*.jpeg
