@@ -174,7 +174,7 @@ export default function UserResults() {
                           ${result.score >= 80 ? 'bg-green-100 text-green-800' : 
                            result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
                            'bg-red-100 text-red-800'}`}>
-                          {result.score.toFixed(1)}%
+                          {result.score ? result.score.toFixed(1) : '0.0'}%
                         </div>
                       </div>
                       
@@ -251,11 +251,12 @@ export default function UserResults() {
                           {new Date(result.completed_at).toLocaleDateString()} {new Date(result.completed_at).toLocaleTimeString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`text-sm font-medium rounded-full px-2 py-1 inline-block
-                            ${result.score >= 80 ? 'bg-green-100 text-green-800' : 
-                             result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
-                             'bg-red-100 text-red-800'}`}>
-                            {result.score.toFixed(1)}%
+                          <div className={`text-sm font-medium rounded-full px-2 py-1 ${
+                            result.score >= 80 ? 'bg-green-100 text-green-800' : 
+                            result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {result.score ? result.score.toFixed(1) : '0.0'}%
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -272,14 +273,6 @@ export default function UserResults() {
                               className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300"
                             >
                               📊 View Details
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => router.push(`/user/quiz/${result.quiz_id}`)}
-                              className="text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
-                            >
-                              🧠 View Quiz
                             </Button>
                             <Button
                               size="sm"

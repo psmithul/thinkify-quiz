@@ -166,11 +166,11 @@ export default function IndividualResultPage({ params }: PageProps) {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">{result.quiz.title}</h2>
             <div className={`text-lg font-bold rounded-full px-4 py-2 ${
-              result.score >= 80 ? 'bg-green-100 text-green-800' : 
-              result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+              (result.score || 0) >= 80 ? 'bg-green-100 text-green-800' : 
+              (result.score || 0) >= 60 ? 'bg-yellow-100 text-yellow-800' :
               'bg-red-100 text-red-800'
             }`}>
-              {result.score.toFixed(1)}%
+              {result.score ? result.score.toFixed(1) : '0.0'}%
             </div>
           </div>
           
@@ -190,7 +190,7 @@ export default function IndividualResultPage({ params }: PageProps) {
             <div className="text-center p-4 bg-gray-50 rounded-lg">
               <div className="text-sm text-gray-500">Your Score</div>
               <div className="text-2xl font-bold text-purple-600">
-                {result.score.toFixed(1)}%
+                {result.score ? result.score.toFixed(1) : '0.0'}%
               </div>
             </div>
             
@@ -210,13 +210,6 @@ export default function IndividualResultPage({ params }: PageProps) {
           transition={{ delay: 0.2 }}
           className="flex flex-wrap gap-4"
         >
-          <Button 
-            onClick={() => router.push(`/user/quiz/${result.quiz_id}`)}
-            variant="outline"
-          >
-            Retake Quiz
-          </Button>
-          
           {eligibilityTier && eligibilityTier.tier >= 3 && (
             <Button 
               onClick={() => router.push(`/user/certificate/${result.id}`)}
@@ -225,6 +218,13 @@ export default function IndividualResultPage({ params }: PageProps) {
               🏆 View Certificate
             </Button>
           )}
+          
+          <Button 
+            onClick={() => router.push('/user/results')}
+            variant="outline"
+          >
+            📊 View All Results
+          </Button>
         </motion.div>
 
         {/* Company Opportunities */}

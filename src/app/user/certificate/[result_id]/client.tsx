@@ -314,7 +314,7 @@ export function ResultId({ resultId }: { resultId: string }) {
                     <div className="flex items-center justify-center space-x-8 mb-6">
                       <div className="text-center">
                         <div className="text-4xl font-bold bg-gradient-to-br from-purple-600 to-blue-600 bg-clip-text text-transparent mb-1">
-                          {result.score.toFixed(1)}%
+                          {result.score ? result.score.toFixed(1) : '0.0'}%
                         </div>
                         <div className="text-sm text-gray-500 font-medium">Final Score</div>
                       </div>

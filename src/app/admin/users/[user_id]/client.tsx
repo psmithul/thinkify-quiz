@@ -287,13 +287,13 @@ export default function UserClient({
                           {new Date(assignment.assigned_at).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {result ? (
-                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                              Completed ({result.score.toFixed(1)}%)
-                            </span>
-                          ) : (
-                            <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
-                              Not started
+                          {result && (
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              result.score >= 80 ? 'bg-green-100 text-green-800' : 
+                              result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              Completed ({result.score ? result.score.toFixed(1) : '0.0'}%)
                             </span>
                           )}
                         </td>
@@ -377,8 +377,14 @@ export default function UserClient({
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {result.quiz?.title || "Unknown quiz"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {result.score.toFixed(1)}%
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <div className={`text-sm font-medium rounded-full px-2 py-1 ${
+                          result.score >= 80 ? 'bg-green-100 text-green-800' : 
+                          result.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {result.score ? result.score.toFixed(1) : '0.0'}%
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(result.completed_at).toLocaleDateString()}
