@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import QuizTimer from '@/components/QuizTimer';
+import { canUserAttemptQuiz, createRetakeRequest, getUserRetakeRequests, type RetakeRequest } from '@/lib/retake-requests';
 
 // Updated question type to match quiz_questions table
 type Question = {
@@ -316,6 +317,14 @@ export default function QuizClient({
   const [showExitWarning, setShowExitWarning] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasAttemptedQuiz, setHasAttemptedQuiz] = useState(false);
+  
+  // Retake request state
+  const [canAttempt, setCanAttempt] = useState(true);
+  const [attemptReason, setAttemptReason] = useState('');
+  const [showRetakeRequest, setShowRetakeRequest] = useState(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [retakeRequestStatus, setRetakeRequestStatus] = useState<string | null>(null);
+  const [userRetakeRequests, setUserRetakeRequests] = useState<RetakeRequest[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -505,35 +514,35 @@ export default function QuizClient({
         
         setQuestions(questionsWithOptions);
 
-        // Check for ANY existing attempts (completed, incomplete, or just started)
-        // STRICT POLICY: Once a user has ANY attempt record, they cannot access the quiz again
-        const { data: attemptData, error: attemptError } = await supabase
-          .from('quiz_attempts')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('quiz_id', quizId)
-          .maybeSingle();
-
-        if (!attemptError && attemptData) {
-          // Mark that user has attempted this quiz
-          setHasAttemptedQuiz(true);
+        // Check user's ability to attempt this quiz using new retake system
+        const attemptCheck = await canUserAttemptQuiz(user.id, quizId);
+        setCanAttempt(attemptCheck.canAttempt);
+        setAttemptReason(attemptCheck.reason);
+        
+        if (attemptCheck.hasRequest !== undefined) {
+          setRetakeRequestStatus(attemptCheck.requestStatus || null);
+        }
+        
+        // If user can't attempt, fetch their retake requests for this quiz
+        if (!attemptCheck.canAttempt) {
+          const userRequests = await getUserRetakeRequests(user.id);
+          const quizRequests = userRequests.filter(req => req.quiz_id === quizId);
+          setUserRetakeRequests(quizRequests);
           
-          if (attemptData.is_completed) {
-            // User has completed this quiz - show results and prevent any further access
-            setScore(attemptData.score);
-            setResultId(attemptData.id);
-            setEligibilityTier(getEligibilityTier(attemptData.score, quizData?.tier_thresholds));
-            setSuccess('You have already completed this quiz! Retakes are not allowed.');
-          } else {
-            // User has started but not completed - this could be a partially completed attempt
-            // STRICT: Don't allow resuming, treat as already attempted
-            setScore(0); // Set a default score to trigger results view
-            setSuccess('You have already started this quiz previously. For security reasons, quiz retakes are not allowed. Your previous attempt has been recorded.');
-            setError('This quiz has already been attempted and cannot be retaken.');
+          // Check if user has already completed the quiz
+          const { data: completedAttempt, error: completedError } = await supabase
+            .from('quiz_attempts')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('quiz_id', quizId)
+            .eq('is_completed', true)
+            .maybeSingle();
+            
+          if (!completedError && completedAttempt) {
+            setScore(completedAttempt.score);
+            setResultId(completedAttempt.id);
+            setEligibilityTier(getEligibilityTier(completedAttempt.score, quizData?.tier_thresholds));
           }
-          
-          // In both cases, block any further quiz interaction
-          return;
         }
       } catch (err) {
         setError(formatErrorMessage(err));
@@ -566,37 +575,19 @@ export default function QuizClient({
     }
   }
 
-  // Start quiz function with immediate attempt recording
+  // Start quiz function with retake request support
   const startQuiz = async () => {
-    if (!user || !quiz) return;
-    
-    // Double-check: if user has attempted before, block immediately
-    if (hasAttemptedQuiz) {
-      setError('You have already attempted this quiz. Retakes are not allowed.');
-      return;
-    }
+    if (!user || !quiz || !canAttempt) return;
     
     try {
-      // Check one more time for existing attempts before creating new one
-      const { data: existingAttempt, error: checkError } = await supabase
-        .from('quiz_attempts')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('quiz_id', quizId)
-        .maybeSingle();
-        
-      if (checkError) {
-        throw checkError;
-      }
+      const startTime = new Date();
       
-      if (existingAttempt) {
-        // User somehow has an existing attempt - block access
-        setHasAttemptedQuiz(true);
-        setError('You have already attempted this quiz. Retakes are not allowed.');
+      // Check one more time if user can attempt
+      const attemptCheck = await canUserAttemptQuiz(user.id, quizId);
+      if (!attemptCheck.canAttempt) {
+        setError(attemptCheck.reason);
         return;
       }
-      
-      const startTime = new Date();
       
       // IMMEDIATELY create quiz attempt record with 'started' status
       // This ensures that even if user closes browser, the attempt is recorded
@@ -622,7 +613,6 @@ export default function QuizClient({
       
       // Only after successful database insert, proceed with quiz start
       setAttemptId(attemptData.id);
-      setHasAttemptedQuiz(true);
       setQuizStartTime(startTime);
       setIsQuizStarted(true);
       
@@ -634,7 +624,6 @@ export default function QuizClient({
       setError(formatErrorMessage(err));
       // Make sure quiz doesn't start if there's any error
       setIsQuizStarted(false);
-      setHasAttemptedQuiz(true); // Still mark as attempted to prevent retries
       exitFullscreen();
     }
   };
@@ -741,6 +730,41 @@ export default function QuizClient({
     }
   }
 
+  // Submit retake request
+  const submitRetakeRequest = async () => {
+    if (!user || !quiz || !attemptReason.trim()) return;
+    
+    setIsSubmittingRequest(true);
+    setError(null);
+    
+    try {
+      const result = await createRetakeRequest(
+        user.id,
+        quizId,
+        quiz.creator_id || quiz.creator?.id || '',
+        attemptReason
+      );
+      
+      if (result.success) {
+        setSuccess('Retake request submitted successfully! The quiz creator will review your request.');
+        setShowRetakeRequest(false);
+        setAttemptReason('');
+        setRetakeRequestStatus('pending');
+        
+        // Refresh user's retake requests
+        const userRequests = await getUserRetakeRequests(user.id);
+        const quizRequests = userRequests.filter(req => req.quiz_id === quizId);
+        setUserRetakeRequests(quizRequests);
+      } else {
+        setError(result.error || 'Failed to submit retake request.');
+      }
+    } catch (err) {
+      setError(formatErrorMessage(err));
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
+
   if (authLoading || isLoading) {
     return (
       <Layout>
@@ -844,8 +868,8 @@ export default function QuizClient({
     );
   }
 
-  // Block access if user has attempted quiz before (for any incomplete attempts)
-  if (hasAttemptedQuiz && score === null) {
+  // Show retake request interface if user cannot attempt
+  if (!canAttempt && score === null) {
     return (
       <Layout>
         <div className="max-w-4xl mx-auto space-y-8">
@@ -859,24 +883,124 @@ export default function QuizClient({
             </Button>
           </div>
           
-          <div className="bg-red-50 p-6 rounded-lg border border-red-200">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-red-500 bg-red-100">
-                <svg className="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-red-800">Access Denied</h2>
-              <p className="text-red-700 max-w-md">
-                You have already attempted this quiz. Quiz retakes are strictly prohibited to maintain assessment integrity.
-              </p>
-              <div className="bg-red-100 p-4 rounded-lg border border-red-300 mt-4">
-                <p className="text-sm text-red-800">
-                  <strong>Note:</strong> Each quiz can only be attempted once per user. This policy ensures fair evaluation for all participants.
+          {retakeRequestStatus === 'pending' ? (
+            /* Pending request status */
+            <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
+              <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-yellow-500 bg-yellow-100">
+                  <svg className="w-8 h-8 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-yellow-800">Retake Request Pending</h2>
+                <p className="text-yellow-700 max-w-md">
+                  Your retake request is being reviewed by the quiz creator. You'll be notified once they respond.
                 </p>
+                
+                {userRetakeRequests.length > 0 && (
+                  <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-300 mt-4 w-full max-w-md">
+                    <h3 className="font-medium text-yellow-800 mb-2">Your Request:</h3>
+                    <p className="text-sm text-yellow-700 italic">"{userRetakeRequests[0]?.reason}"</p>
+                    <p className="text-xs text-yellow-600 mt-2">
+                      Submitted: {new Date(userRetakeRequests[0]?.requested_at).toLocaleString()}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          ) : retakeRequestStatus === 'denied' ? (
+            /* Denied request status */
+            <div className="bg-red-50 p-6 rounded-lg border border-red-200">
+              <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-red-500 bg-red-100">
+                  <svg className="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-red-800">Retake Request Denied</h2>
+                <p className="text-red-700 max-w-md">
+                  Your retake request has been reviewed and denied by the quiz creator.
+                </p>
+                
+                {userRetakeRequests.length > 0 && userRetakeRequests[0]?.response_message && (
+                  <div className="bg-red-100 p-4 rounded-lg border border-red-300 mt-4 w-full max-w-md">
+                    <h3 className="font-medium text-red-800 mb-2">Creator's Response:</h3>
+                    <p className="text-sm text-red-700">"{userRetakeRequests[0].response_message}"</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* No request submitted yet - show request form */
+            <div className="space-y-6">
+              <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                  <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-blue-500 bg-blue-100">
+                    <svg className="w-8 h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-blue-800">Quiz Already Attempted</h2>
+                  <p className="text-blue-700 max-w-md">
+                    {attemptReason}
+                  </p>
+                </div>
+              </div>
+              
+              {!showRetakeRequest ? (
+                <div className="bg-white p-6 rounded-lg border border-gray-200 text-center">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Request Another Attempt</h3>
+                  <p className="text-gray-600 mb-6">
+                    If you believe you need another attempt at this quiz, you can submit a request to the quiz creator for approval.
+                  </p>
+                  <Button
+                    onClick={() => setShowRetakeRequest(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    📝 Request Retake
+                  </Button>
+                </div>
+              ) : (
+                <div className="bg-white p-6 rounded-lg border border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Submit Retake Request</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-2">
+                        Reason for retake request <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        id="reason"
+                        value={attemptReason}
+                        onChange={(e) => setAttemptReason(e.target.value)}
+                        rows={4}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Please explain why you need to retake this quiz (e.g., technical issues, misunderstanding, etc.)"
+                        required
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <Button
+                        onClick={submitRetakeRequest}
+                        disabled={!attemptReason.trim() || isSubmittingRequest}
+                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
+                      >
+                        {isSubmittingRequest ? 'Submitting...' : '📤 Submit Request'}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setShowRetakeRequest(false);
+                          setAttemptReason('');
+                        }}
+                        variant="outline"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           
           <Button
             onClick={() => router.push('/user/dashboard')}
@@ -949,78 +1073,68 @@ export default function QuizClient({
                 <p className="text-gray-600 mb-4">{quiz.description}</p>
               )}
               
-              {/* Block start if user has attempted before */}
-              {hasAttemptedQuiz ? (
-                <div className="bg-red-50 p-6 rounded-lg border border-red-200 mb-6">
-                  <div className="flex items-center justify-center space-x-3 text-red-800 mb-4">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
+                <div className="flex items-center justify-center space-x-6 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                     </svg>
-                    <span className="font-bold text-lg">Quiz Already Attempted</span>
-                  </div>
-                  <p className="text-red-700 mb-3">
-                    You have already attempted this quiz. For security reasons, retakes are not allowed.
-                  </p>
-                  <p className="text-sm text-red-600">
-                    Each quiz can only be attempted once to ensure fair assessment.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-                    <div className="flex items-center justify-center space-x-6 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-blue-700 font-medium">{questions.length} Questions</span>
-                      </div>
-                      {quiz.time_limit_minutes && (
-                        <div className="flex items-center space-x-2">
-                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                          </svg>
-                          <span className="text-blue-700 font-medium">{quiz.time_limit_minutes} Minutes</span>
-                        </div>
-                      )}
-                      {!quiz.time_limit_minutes && (
-                        <div className="flex items-center space-x-2">
-                          <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          <span className="text-green-700 font-medium">No Time Limit</span>
-                        </div>
-                      )}
-                    </div>
+                    <span className="text-blue-700 font-medium">{questions.length} Questions</span>
                   </div>
                   {quiz.time_limit_minutes && (
-                    <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mb-6">
-                      <p className="text-amber-800 text-sm">
-                        ⚠️ <strong>Important:</strong> Once you start, you cannot exit the quiz until completion or time expires.
-                      </p>
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-blue-700 font-medium">{quiz.time_limit_minutes} Minutes</span>
                     </div>
                   )}
-                  
-                  {/* One-attempt warning */}
-                  <div className="bg-red-50 p-4 rounded-lg border border-red-200 mb-6">
-                    <p className="text-red-800 text-sm">
-                      🚨 <strong>One Attempt Only:</strong> You can only take this quiz once. Switching tabs, minimizing the browser, or exiting fullscreen will automatically submit your quiz.
-                    </p>
-                  </div>
-                </>
+                  {!quiz.time_limit_minutes && (
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-green-700 font-medium">No Time Limit</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {quiz.time_limit_minutes && (
+                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mb-6">
+                  <p className="text-amber-800 text-sm">
+                    ⚠️ <strong>Important:</strong> Once you start, you cannot exit the quiz until completion or time expires.
+                  </p>
+                </div>
+              )}
+              
+              {/* Security warning */}
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200 mb-6">
+                <p className="text-red-800 text-sm">
+                  🚨 <strong>Security Notice:</strong> Switching tabs, minimizing the browser, or exiting fullscreen will automatically submit your quiz.
+                </p>
+              </div>
+              
+              {/* Show attempt reason if cannot attempt */}
+              {!canAttempt && (
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 mb-6">
+                  <p className="text-orange-800 text-sm">
+                    ℹ️ <strong>Note:</strong> {attemptReason}
+                  </p>
+                </div>
               )}
             </div>
             
             <Button
               onClick={startQuiz}
               size="lg"
-              disabled={hasAttemptedQuiz}
-              className={hasAttemptedQuiz 
+              disabled={!canAttempt}
+              className={!canAttempt
                 ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
                 : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
               }
             >
-              {hasAttemptedQuiz ? "❌ Already Attempted" : "🚀 Start Quiz"}
+              {!canAttempt ? "❌ Cannot Attempt" : "🚀 Start Quiz"}
             </Button>
           </div>
         ) : (
