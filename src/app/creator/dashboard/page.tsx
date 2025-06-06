@@ -287,7 +287,7 @@ export default function CreatorDashboard() {
           >
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Button
                   onClick={() => router.push('/creator/quiz/create')}
                   className="h-20 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
@@ -307,17 +307,6 @@ export default function CreatorDashboard() {
                   <div className="text-center">
                     <div className="text-2xl mb-1">📚</div>
                     <div className="text-sm font-medium">Create Course</div>
-                  </div>
-                </Button>
-                
-                <Button
-                  onClick={() => router.push('/creator/retake-requests')}
-                  className="h-20 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                  fullWidth
-                >
-                  <div className="text-center">
-                    <div className="text-2xl mb-1">📋</div>
-                    <div className="text-sm font-medium">Retake Requests</div>
                   </div>
                 </Button>
                 

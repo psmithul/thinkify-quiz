@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import QuizTimer from '@/components/QuizTimer';
-import { canUserAttemptQuiz, createRetakeRequest, getUserRetakeRequests, type RetakeRequest } from '@/lib/retake-requests';
 
 // Updated question type to match quiz_questions table
 type Question = {
@@ -186,108 +185,141 @@ export function getEligibilityTier(score: number, customThresholds?: any): Eligi
 const CodeBlock = ({ children }: { children: string }) => {
   // Check if there are code blocks in the text
   const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
+  const matches = [...children.matchAll(codeBlockRegex)];
   
-  // Split text into parts: text before code, code blocks, text after code
-  while ((match = codeBlockRegex.exec(children)) !== null) {
-    // Add text before the code block
-    if (match.index > lastIndex) {
-      const textBefore = children.slice(lastIndex, match.index).trim();
-      if (textBefore) {
-        parts.push({
-          type: 'text',
-          content: textBefore
-        });
+  if (matches.length > 0) {
+    // Split the text by code blocks and render each part
+    const parts = [];
+    let lastIndex = 0;
+    
+    matches.forEach((match, index) => {
+      const matchStart = match.index!;
+      const matchEnd = matchStart + match[0].length;
+      
+      // Add text before the code block
+      if (matchStart > lastIndex) {
+        const textBefore = children.slice(lastIndex, matchStart);
+        if (textBefore.trim()) {
+          parts.push(
+            <div key={`text-${index}`} className="mb-4">
+              <span 
+                className="question-text"
+                dangerouslySetInnerHTML={{
+                  __html: textBefore.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">$1</code>')
+                }}
+              />
+            </div>
+          );
+        }
+      }
+      
+      // Add the code block
+      const language = match[1] || '';
+      const code = match[2].trim();
+      
+      parts.push(
+        <div key={`code-${index}`} className="my-4 bg-gray-900 rounded-lg overflow-hidden">
+          {language && (
+            <div className="bg-gray-800 px-4 py-2 text-xs font-medium text-gray-300 uppercase tracking-wide">
+              {language}
+            </div>
+          )}
+          <pre className="p-4 overflow-x-auto">
+            <code className="text-sm text-gray-100 font-mono leading-relaxed whitespace-pre-wrap">
+              {code}
+            </code>
+          </pre>
+        </div>
+      );
+      
+      lastIndex = matchEnd;
+    });
+    
+    // Add any remaining text after the last code block
+    if (lastIndex < children.length) {
+      const textAfter = children.slice(lastIndex);
+      if (textAfter.trim()) {
+        parts.push(
+          <div key="text-after" className="mt-4">
+            <span 
+              className="question-text"
+              dangerouslySetInnerHTML={{
+                __html: textAfter.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">$1</code>')
+              }}
+            />
+          </div>
+        );
       }
     }
     
-    // Add the code block
-    const language = match[1] || '';
-    const code = match[2].trim();
-    parts.push({
-      type: 'code',
-      language,
-      content: code
-    });
-    
-    lastIndex = match.index + match[0].length;
+    return <div>{parts}</div>;
   }
   
-  // Add any remaining text after the last code block
-  if (lastIndex < children.length) {
-    const textAfter = children.slice(lastIndex).trim();
-    if (textAfter) {
-      parts.push({
-        type: 'text',
-        content: textAfter
-      });
-    }
-  }
-  
-  // If no code blocks found, treat as regular text
-  if (parts.length === 0) {
-    parts.push({
-      type: 'text',
-      content: children
-    });
-  }
-  
+  // Handle inline code only (no code blocks)
   return (
-    <div className="question-content">
-      {parts.map((part, index) => {
-        if (part.type === 'code') {
-          return (
-            <div key={index} className="my-4 bg-gray-900 rounded-lg overflow-hidden">
-              {part.language && (
-                <div className="bg-gray-800 px-4 py-2 text-xs font-medium text-gray-300 uppercase tracking-wide">
-                  {part.language}
-                </div>
-              )}
-              <pre className="p-4 overflow-x-auto">
-                <code className="text-sm text-gray-100 font-mono leading-relaxed whitespace-pre-wrap">
-                  {part.content}
-                </code>
-              </pre>
-            </div>
-          );
-        } else {
-          // Handle regular text with inline code formatting
-          return (
-            <div 
-              key={index}
-              className="text-gray-800 mb-2"
-              dangerouslySetInnerHTML={{
-                __html: part.content.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-gray-800">$1</code>')
-              }}
-            />
-          );
-        }
-      })}
-    </div>
+    <span 
+      className="question-text"
+      dangerouslySetInnerHTML={{
+        __html: children.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">$1</code>')
+      }}
+    />
   );
 };
 
 // Fullscreen utilities
 const enterFullscreen = () => {
-  const element = document.documentElement;
-  if (element.requestFullscreen) {
-    element.requestFullscreen();
-  } else if ((element as any).webkitRequestFullscreen) {
-    (element as any).webkitRequestFullscreen();
-  } else if ((element as any).msRequestFullscreen) {
-    (element as any).msRequestFullscreen();
+  try {
+    const element = document.documentElement;
+    
+    // Check if already in fullscreen
+    const isInFullscreen = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).msFullscreenElement
+    );
+    
+    if (isInFullscreen) {
+      // Already in fullscreen, no need to enter
+      return;
+    }
+    
+    if (element.requestFullscreen) {
+      element.requestFullscreen();
+    } else if ((element as any).webkitRequestFullscreen) {
+      (element as any).webkitRequestFullscreen();
+    } else if ((element as any).msRequestFullscreen) {
+      (element as any).msRequestFullscreen();
+    }
+  } catch (error) {
+    // Silently handle any fullscreen entry errors
+    console.warn('Failed to enter fullscreen:', error);
   }
 };
 
 const exitFullscreen = () => {
-  if (document.exitFullscreen) {
-    document.exitFullscreen();
-  } else if ((document as any).webkitExitFullscreen) {
-    (document as any).webkitExitFullscreen();
-  } else if ((document as any).msExitFullscreen) {
-    (document as any).msExitFullscreen();
+  // Check if document is actually in fullscreen before attempting to exit
+  const isInFullscreen = !!(
+    document.fullscreenElement ||
+    (document as any).webkitFullscreenElement ||
+    (document as any).msFullscreenElement
+  );
+  
+  if (!isInFullscreen) {
+    // Document is not in fullscreen, no need to exit
+    return;
+  }
+  
+  try {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if ((document as any).webkitExitFullscreen) {
+      (document as any).webkitExitFullscreen();
+    } else if ((document as any).msExitFullscreen) {
+      (document as any).msExitFullscreen();
+    }
+  } catch (error) {
+    // Silently handle any fullscreen exit errors
+    console.warn('Failed to exit fullscreen:', error);
   }
 };
 
@@ -316,52 +348,12 @@ export default function QuizClient({
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [showExitWarning, setShowExitWarning] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [hasAttemptedQuiz, setHasAttemptedQuiz] = useState(false);
-  
-  // Retake request state
-  const [canAttempt, setCanAttempt] = useState(true);
-  const [attemptReason, setAttemptReason] = useState('');
-  const [showRetakeRequest, setShowRetakeRequest] = useState(false);
-  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
-  const [retakeRequestStatus, setRetakeRequestStatus] = useState<string | null>(null);
-  const [userRetakeRequests, setUserRetakeRequests] = useState<RetakeRequest[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
     }
   }, [authLoading, user, router]);
-
-  // Enhanced visibility change detection - end quiz if user switches tabs
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && isQuizStarted && !score) {
-        // User switched tabs or minimized browser during active quiz
-        const shouldEndQuiz = window.confirm(
-          'For security reasons, switching tabs or minimizing the browser during the quiz is not allowed. The quiz will now be submitted automatically. Click OK to continue.'
-        );
-        if (shouldEndQuiz || true) { // Always end quiz regardless of choice
-          handleSubmitQuiz(true);
-        }
-      }
-    };
-
-    // Multiple event listeners for better browser compatibility
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleVisibilityChange);
-    window.addEventListener('focus', () => {
-      if (isQuizStarted && !score) {
-        // Even gaining focus back won't help - quiz is already compromised
-        handleSubmitQuiz(true);
-      }
-    });
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
-    };
-  }, [isQuizStarted, score]);
 
   // Fullscreen change detection
   useEffect(() => {
@@ -374,9 +366,14 @@ export default function QuizClient({
       
       setIsFullscreen(isCurrentlyFullscreen);
       
-      // If user exits fullscreen during quiz, end the quiz immediately
+      // If user exits fullscreen during quiz, end the quiz
       if (!isCurrentlyFullscreen && isQuizStarted && !score) {
-        handleSubmitQuiz(true); // Force submit without confirmation
+        const shouldEndQuiz = window.confirm(
+          'You have exited fullscreen mode. For security reasons, the quiz will now be submitted automatically. Click OK to continue.'
+        );
+        if (shouldEndQuiz) {
+          handleSubmitQuiz(true);
+        }
       }
     };
 
@@ -391,24 +388,22 @@ export default function QuizClient({
     };
   }, [isQuizStarted, score]);
 
-  // Enhanced prevention of quiz exit during active quiz
+  // Prevent quiz exit during active quiz
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isQuizStarted && !score) {
         e.preventDefault();
-        e.returnValue = 'You have an active quiz. Leaving will automatically submit your quiz.';
-        // Also force submit the quiz when they try to leave
-        handleSubmitQuiz(true);
+        e.returnValue = 'You have an active quiz. Are you sure you want to leave? Your progress will be lost.';
         return e.returnValue;
       }
     };
 
     const handlePopState = (e: PopStateEvent) => {
       if (isQuizStarted && !score) {
-        // Don't even ask for confirmation - just submit
-        handleSubmitQuiz(true);
-        // Still prevent navigation to be safe
-        window.history.pushState(null, '', window.location.href);
+        const confirmed = window.confirm('You have an active quiz. Are you sure you want to leave? Your progress will be lost.');
+        if (!confirmed) {
+          window.history.pushState(null, '', window.location.href);
+        }
       }
     };
 
@@ -416,7 +411,7 @@ export default function QuizClient({
       window.addEventListener('beforeunload', handleBeforeUnload);
       window.addEventListener('popstate', handlePopState);
       
-      // Prevent back button by manipulating history
+      // Prevent back button
       window.history.pushState(null, '', window.location.href);
     }
 
@@ -514,35 +509,20 @@ export default function QuizClient({
         
         setQuestions(questionsWithOptions);
 
-        // Check user's ability to attempt this quiz using new retake system
-        const attemptCheck = await canUserAttemptQuiz(user.id, quizId);
-        setCanAttempt(attemptCheck.canAttempt);
-        setAttemptReason(attemptCheck.reason);
-        
-        if (attemptCheck.hasRequest !== undefined) {
-          setRetakeRequestStatus(attemptCheck.requestStatus || null);
-        }
-        
-        // If user can't attempt, fetch their retake requests for this quiz
-        if (!attemptCheck.canAttempt) {
-          const userRequests = await getUserRetakeRequests(user.id);
-          const quizRequests = userRequests.filter(req => req.quiz_id === quizId);
-          setUserRetakeRequests(quizRequests);
-          
-          // Check if user has already completed the quiz
-          const { data: completedAttempt, error: completedError } = await supabase
-            .from('quiz_attempts')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('quiz_id', quizId)
-            .eq('is_completed', true)
-            .maybeSingle();
-            
-          if (!completedError && completedAttempt) {
-            setScore(completedAttempt.score);
-            setResultId(completedAttempt.id);
-            setEligibilityTier(getEligibilityTier(completedAttempt.score, quizData?.tier_thresholds));
-          }
+        // Check if user has already completed this quiz
+        const { data: attemptData, error: attemptError } = await supabase
+          .from('quiz_attempts')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('quiz_id', quizId)
+          .maybeSingle();
+
+        if (!attemptError && attemptData) {
+          // User has already completed this quiz
+          setScore(attemptData.score);
+          setResultId(attemptData.id);
+          setEligibilityTier(getEligibilityTier(attemptData.score, quizData?.tier_thresholds));
+          setSuccess('You have already completed this quiz!');
         }
       } catch (err) {
         setError(formatErrorMessage(err));
@@ -575,34 +555,26 @@ export default function QuizClient({
     }
   }
 
-  // Start quiz function with retake request support
+  // Start quiz function
   const startQuiz = async () => {
-    if (!user || !quiz || !canAttempt) return;
+    if (!user || !quiz) return;
     
     try {
+      // Enter fullscreen mode
+      enterFullscreen();
+      
       const startTime = new Date();
+      setQuizStartTime(startTime);
+      setIsQuizStarted(true);
       
-      // Check one more time if user can attempt
-      const attemptCheck = await canUserAttemptQuiz(user.id, quizId);
-      if (!attemptCheck.canAttempt) {
-        setError(attemptCheck.reason);
-        return;
-      }
-      
-      // IMMEDIATELY create quiz attempt record with 'started' status
-      // This ensures that even if user closes browser, the attempt is recorded
+      // Create quiz attempt record
       const { data: attemptData, error: attemptError } = await supabase
         .from('quiz_attempts')
         .insert({
           quiz_id: quizId,
           user_id: user.id,
           started_at: startTime.toISOString(),
-          is_completed: false,
-          is_started: true, // Add this flag if column exists
-          score: 0, // Default score
-          max_score: 0, // Will be updated on submission
-          answers: JSON.stringify({}), // Empty answers initially
-          time_taken_seconds: 0 // Will be updated on submission
+          is_completed: false
         })
         .select()
         .single();
@@ -611,20 +583,9 @@ export default function QuizClient({
         throw attemptError;
       }
       
-      // Only after successful database insert, proceed with quiz start
       setAttemptId(attemptData.id);
-      setQuizStartTime(startTime);
-      setIsQuizStarted(true);
-      
-      // Enter fullscreen mode AFTER database record is created
-      enterFullscreen();
-      
-      console.log('Quiz attempt created and started:', attemptData.id);
     } catch (err) {
       setError(formatErrorMessage(err));
-      // Make sure quiz doesn't start if there's any error
-      setIsQuizStarted(false);
-      exitFullscreen();
     }
   };
 
@@ -670,7 +631,7 @@ export default function QuizClient({
       const endTime = new Date();
       const timeTakenSeconds = quizStartTime ? Math.round((endTime.getTime() - quizStartTime.getTime()) / 1000) : null;
       
-      // Update the existing attempt or create/update using upsert
+      // Update the existing attempt or create new one
       const attemptData = {
         quiz_id: quizId,
         user_id: user.id,
@@ -695,13 +656,10 @@ export default function QuizClient({
         if (error) throw error;
         resultData = data;
       } else {
-        // Use upsert to handle potential duplicate key constraint
+        // Create new attempt (fallback)
         const { data, error } = await supabase
           .from('quiz_attempts')
-          .upsert(attemptData, { 
-            onConflict: 'quiz_id,user_id',
-            ignoreDuplicates: false 
-          })
+          .insert(attemptData)
           .select()
           .single();
           
@@ -714,8 +672,10 @@ export default function QuizClient({
       setEligibilityTier(tier);
       setIsQuizStarted(false); // Allow navigation again
       
-      // Exit fullscreen when quiz is completed
-      exitFullscreen();
+      // Exit fullscreen when quiz is completed (with small delay to ensure state updates)
+      setTimeout(() => {
+        exitFullscreen();
+      }, 100);
       
       if (autoSubmit) {
         setSuccess('Time\'s up! Quiz has been automatically submitted.');
@@ -729,41 +689,6 @@ export default function QuizClient({
       setIsSubmitting(false);
     }
   }
-
-  // Submit retake request
-  const submitRetakeRequest = async () => {
-    if (!user || !quiz || !attemptReason.trim()) return;
-    
-    setIsSubmittingRequest(true);
-    setError(null);
-    
-    try {
-      const result = await createRetakeRequest(
-        user.id,
-        quizId,
-        quiz.creator_id || quiz.creator?.id || '',
-        attemptReason
-      );
-      
-      if (result.success) {
-        setSuccess('Retake request submitted successfully! The quiz creator will review your request.');
-        setShowRetakeRequest(false);
-        setAttemptReason('');
-        setRetakeRequestStatus('pending');
-        
-        // Refresh user's retake requests
-        const userRequests = await getUserRetakeRequests(user.id);
-        const quizRequests = userRequests.filter(req => req.quiz_id === quizId);
-        setUserRetakeRequests(quizRequests);
-      } else {
-        setError(result.error || 'Failed to submit retake request.');
-      }
-    } catch (err) {
-      setError(formatErrorMessage(err));
-    } finally {
-      setIsSubmittingRequest(false);
-    }
-  };
 
   if (authLoading || isLoading) {
     return (
@@ -809,198 +734,27 @@ export default function QuizClient({
             </Button>
           </div>
           
-          {hasAttemptedQuiz && score === 0 && (
-            /* Show message for incomplete/blocked attempts */
-            <div className="bg-amber-50 p-6 rounded-lg border border-amber-200">
-              <div className="flex flex-col items-center justify-center space-y-4 text-center">
-                <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-amber-500 bg-amber-100">
-                  <svg className="w-8 h-8 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-amber-800">Quiz Already Attempted</h2>
-                <p className="text-amber-700 max-w-md">
-                  You have previously started this quiz. For security and fairness reasons, quiz retakes are not permitted. 
-                  Each user is allowed only one attempt per quiz.
-                </p>
-                <div className="bg-amber-100 p-4 rounded-lg border border-amber-300 mt-4">
-                  <p className="text-sm text-amber-800">
-                    <strong>Security Policy:</strong> Quiz attempts are immediately recorded when started to prevent retakes and ensure assessment integrity.
-                  </p>
-                </div>
+          <div className={`p-6 rounded-lg border ${eligibilityTier.borderClass} ${eligibilityTier.bgClass}`}>
+            <div className="flex flex-col items-center justify-center space-y-4 text-center">
+              <h2 className="text-2xl font-bold">Quiz Completed!</h2>
+              <div className="flex items-center justify-center w-32 h-32 rounded-full border-4 border-current">
+                <span className="text-4xl font-bold">{score}%</span>
               </div>
-            </div>
-          )}
-          
-          {eligibilityTier && score > 0 && (
-            <div className={`p-6 rounded-lg border ${eligibilityTier.borderClass} ${eligibilityTier.bgClass}`}>
-              <div className="flex flex-col items-center justify-center space-y-4 text-center">
-                <h2 className="text-2xl font-bold">Quiz Completed!</h2>
-                <div className="flex items-center justify-center w-32 h-32 rounded-full border-4 border-current">
-                  <span className="text-4xl font-bold">{score}%</span>
-                </div>
-                <h3 className={`text-xl font-bold ${eligibilityTier.textClass}`}>
-                  {eligibilityTier.label} Level
-                </h3>
-                <p>{eligibilityTier.description}</p>
-                
-                {eligibilityTier.tier >= 3 && (
-                  <Button
-                    onClick={() => router.push(`/user/certificate/${resultId}`)}
-                    fullWidth
-                  >
-                    View Your Certificate
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-          
-          <Button
-            onClick={() => router.push('/user/dashboard')}
-            variant="outline"
-            fullWidth
-          >
-            Back to Dashboard
-          </Button>
-        </div>
-      </Layout>
-    );
-  }
-
-  // Show retake request interface if user cannot attempt
-  if (!canAttempt && score === null) {
-    return (
-      <Layout>
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">{quiz.title}</h1>
-            <Button
-              variant="outline"
-              onClick={() => router.push('/user/dashboard')}
-            >
-              Back to Dashboard
-            </Button>
-          </div>
-          
-          {retakeRequestStatus === 'pending' ? (
-            /* Pending request status */
-            <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
-              <div className="flex flex-col items-center justify-center space-y-4 text-center">
-                <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-yellow-500 bg-yellow-100">
-                  <svg className="w-8 h-8 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-yellow-800">Retake Request Pending</h2>
-                <p className="text-yellow-700 max-w-md">
-                  Your retake request is being reviewed by the quiz creator. You'll be notified once they respond.
-                </p>
-                
-                {userRetakeRequests.length > 0 && (
-                  <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-300 mt-4 w-full max-w-md">
-                    <h3 className="font-medium text-yellow-800 mb-2">Your Request:</h3>
-                    <p className="text-sm text-yellow-700 italic">"{userRetakeRequests[0]?.reason}"</p>
-                    <p className="text-xs text-yellow-600 mt-2">
-                      Submitted: {new Date(userRetakeRequests[0]?.requested_at).toLocaleString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : retakeRequestStatus === 'denied' ? (
-            /* Denied request status */
-            <div className="bg-red-50 p-6 rounded-lg border border-red-200">
-              <div className="flex flex-col items-center justify-center space-y-4 text-center">
-                <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-red-500 bg-red-100">
-                  <svg className="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-red-800">Retake Request Denied</h2>
-                <p className="text-red-700 max-w-md">
-                  Your retake request has been reviewed and denied by the quiz creator.
-                </p>
-                
-                {userRetakeRequests.length > 0 && userRetakeRequests[0]?.response_message && (
-                  <div className="bg-red-100 p-4 rounded-lg border border-red-300 mt-4 w-full max-w-md">
-                    <h3 className="font-medium text-red-800 mb-2">Creator's Response:</h3>
-                    <p className="text-sm text-red-700">"{userRetakeRequests[0].response_message}"</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* No request submitted yet - show request form */
-            <div className="space-y-6">
-              <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-                <div className="flex flex-col items-center justify-center space-y-4 text-center">
-                  <div className="flex items-center justify-center w-16 h-16 rounded-full border-4 border-blue-500 bg-blue-100">
-                    <svg className="w-8 h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-blue-800">Quiz Already Attempted</h2>
-                  <p className="text-blue-700 max-w-md">
-                    {attemptReason}
-                  </p>
-                </div>
-              </div>
+              <h3 className={`text-xl font-bold ${eligibilityTier.textClass}`}>
+                {eligibilityTier.label} Level
+              </h3>
+              <p>{eligibilityTier.description}</p>
               
-              {!showRetakeRequest ? (
-                <div className="bg-white p-6 rounded-lg border border-gray-200 text-center">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Request Another Attempt</h3>
-                  <p className="text-gray-600 mb-6">
-                    If you believe you need another attempt at this quiz, you can submit a request to the quiz creator for approval.
-                  </p>
-                  <Button
-                    onClick={() => setShowRetakeRequest(true)}
-                    className="bg-indigo-600 hover:bg-indigo-700"
-                  >
-                    📝 Request Retake
-                  </Button>
-                </div>
-              ) : (
-                <div className="bg-white p-6 rounded-lg border border-gray-200">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Submit Retake Request</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-2">
-                        Reason for retake request <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        id="reason"
-                        value={attemptReason}
-                        onChange={(e) => setAttemptReason(e.target.value)}
-                        rows={4}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Please explain why you need to retake this quiz (e.g., technical issues, misunderstanding, etc.)"
-                        required
-                      />
-                    </div>
-                    <div className="flex space-x-3">
-                      <Button
-                        onClick={submitRetakeRequest}
-                        disabled={!attemptReason.trim() || isSubmittingRequest}
-                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
-                      >
-                        {isSubmittingRequest ? 'Submitting...' : '📤 Submit Request'}
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setShowRetakeRequest(false);
-                          setAttemptReason('');
-                        }}
-                        variant="outline"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+              {eligibilityTier.tier >= 3 && (
+                <Button
+                  onClick={() => router.push(`/user/certificate/${resultId}`)}
+                  fullWidth
+                >
+                  View Your Certificate
+                </Button>
               )}
             </div>
-          )}
+          </div>
           
           <Button
             onClick={() => router.push('/user/dashboard')}
@@ -1072,7 +826,6 @@ export default function QuizClient({
               {quiz.description && (
                 <p className="text-gray-600 mb-4">{quiz.description}</p>
               )}
-              
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
                 <div className="flex items-center justify-center space-x-6 text-sm">
                   <div className="flex items-center space-x-2">
@@ -1099,7 +852,6 @@ export default function QuizClient({
                   )}
                 </div>
               </div>
-              
               {quiz.time_limit_minutes && (
                 <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mb-6">
                   <p className="text-amber-800 text-sm">
@@ -1107,34 +859,13 @@ export default function QuizClient({
                   </p>
                 </div>
               )}
-              
-              {/* Security warning */}
-              <div className="bg-red-50 p-4 rounded-lg border border-red-200 mb-6">
-                <p className="text-red-800 text-sm">
-                  🚨 <strong>Security Notice:</strong> Switching tabs, minimizing the browser, or exiting fullscreen will automatically submit your quiz.
-                </p>
-              </div>
-              
-              {/* Show attempt reason if cannot attempt */}
-              {!canAttempt && (
-                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 mb-6">
-                  <p className="text-orange-800 text-sm">
-                    ℹ️ <strong>Note:</strong> {attemptReason}
-                  </p>
-                </div>
-              )}
             </div>
-            
             <Button
               onClick={startQuiz}
               size="lg"
-              disabled={!canAttempt}
-              className={!canAttempt
-                ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
-                : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-              }
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
             >
-              {!canAttempt ? "❌ Cannot Attempt" : "🚀 Start Quiz"}
+              🚀 Start Quiz
             </Button>
           </div>
         ) : (

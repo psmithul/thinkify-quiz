@@ -277,6 +277,14 @@ export default function UserResults() {
                             <Button
                               size="sm"
                               variant="outline"
+                              onClick={() => router.push(`/user/quiz/${result.quiz_id}`)}
+                              className="text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
+                            >
+                              🧠 View Quiz
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() => handleShowCompanyOpportunities(result)}
                               className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
                             >

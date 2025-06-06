@@ -210,6 +210,13 @@ export default function IndividualResultPage({ params }: PageProps) {
           transition={{ delay: 0.2 }}
           className="flex flex-wrap gap-4"
         >
+          <Button 
+            onClick={() => router.push(`/user/quiz/${result.quiz_id}`)}
+            variant="outline"
+          >
+            Retake Quiz
+          </Button>
+          
           {eligibilityTier && eligibilityTier.tier >= 3 && (
             <Button 
               onClick={() => router.push(`/user/certificate/${result.id}`)}
@@ -218,13 +225,6 @@ export default function IndividualResultPage({ params }: PageProps) {
               🏆 View Certificate
             </Button>
           )}
-          
-          <Button 
-            onClick={() => router.push('/user/results')}
-            variant="outline"
-          >
-            📊 View All Results
-          </Button>
         </motion.div>
 
         {/* Company Opportunities */}
