@@ -36,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
-  const [isTabVisible, setIsTabVisible] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -49,18 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(new Error('Authentication timeout - please try again'));
     }
   });
-
-  // Handle tab visibility to prevent unnecessary operations when tab is inactive
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsTabVisible(!document.hidden);
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
 
   const retryAuth = useCallback(async () => {
     if (retryCount >= 3) {
@@ -99,13 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [retryCount]);
 
   const fetchUserData = useCallback(async (authUser: SupabaseUser) => {
-    // Don't fetch data when tab is not visible to save resources
-    if (!isTabVisible) {
-      console.log('Tab not visible, skipping user data fetch');
-      setIsLoading(false);
-      return;
-    }
-
     try {
       setIsLoading(true);
       setError(null);
@@ -255,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(new Error('Failed to load user data completely'));
       }
     }
-  }, [isTabVisible]);
+  }, []);
 
   // Helper functions to extract LinkedIn data (OpenID Connect format)
   const extractLinkedInName = (user: SupabaseUser): string | null => {
@@ -315,7 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Get initial session
     const getInitialSession = async () => {
       try {
-        console.log('Getting initial session, tab visible:', isTabVisible);
+        console.log('Getting initial session');
         
         // Set a fallback timeout to ensure loading never hangs forever
         initializationTimeout = setTimeout(() => {
@@ -338,7 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         
-        if (session?.user && isTabVisible) {
+        if (session?.user) {
           await fetchUserData(session.user);
         } else {
           clearTimeout(initializationTimeout);
@@ -353,11 +333,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // Only initialize when tab is visible or on first load
-    if (isTabVisible || !user) {
+    // Only initialize when there's no user
+    if (!user) {
       getInitialSession();
     } else {
-      // If tab becomes hidden and we already have a user, just clear loading
+      // If user exists, just clear loading
       setIsLoading(false);
     }
 
@@ -367,12 +347,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
-      console.log('Auth state change:', event, session?.user?.email, 'tab visible:', isTabVisible);
+      console.log('Auth state change:', event, session?.user?.email);
       
       setSession(session);
       setUser(session?.user ?? null);
       
-      if (session?.user && isTabVisible) {
+      if (session?.user) {
         await fetchUserData(session.user);
       } else {
         setUserData(null);
@@ -387,15 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(initializationTimeout);
       subscription.unsubscribe();
     };
-  }, [isTabVisible]); // Remove fetchUserData dependency to prevent infinite loops
-
-  // Handle tab visibility changes - refresh data when tab becomes visible again
-  useEffect(() => {
-    if (isTabVisible && user && !userData && !isLoading) {
-      console.log('Tab became visible, refreshing user data');
-      fetchUserData(user);
-    }
-  }, [isTabVisible, user, userData, isLoading, fetchUserData]);
+  }, []);
 
   const signInWithEmail = async (email: string, password: string): Promise<{ success: boolean; redirectTo?: string }> => {
     try {

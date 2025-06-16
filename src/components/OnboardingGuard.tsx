@@ -62,7 +62,6 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
   const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
-  const [isTabVisible, setIsTabVisible] = useState(true);
   
   const [formData, setFormData] = useState<OnboardingFormData>({
     full_name: '',
@@ -74,22 +73,10 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
     phone: ''
   });
 
-  // Handle tab visibility to prevent unnecessary operations when tab is inactive
+  // Check if user needs onboarding
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsTabVisible(!document.hidden);
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  // Check if user needs onboarding - FIXED: Removed hasCheckedOnboarding from dependencies to prevent infinite loop
-  useEffect(() => {
-    // Only run when tab is visible and we have user data
-    if (!isTabVisible || authLoading || !user) {
+    // Only run when we have user data
+    if (authLoading || !user) {
       return;
     }
 
@@ -160,7 +147,7 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
     };
 
     checkOnboardingNeeded();
-  }, [user, userData, authLoading, isTabVisible]); // Removed hasCheckedOnboarding from dependencies
+  }, [user, userData, authLoading]); // Removed isTabVisible from dependencies
 
   // Reset check flag when user changes
   useEffect(() => {

@@ -398,6 +398,32 @@ export default function QuizClient({
     };
   }, [isQuizStarted, score]);
 
+  // Tab visibility detection during active quiz
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const isTabVisible = !document.hidden;
+      
+      // Only trigger during active quiz (quiz started but not yet completed)
+      if (!isTabVisible && isQuizStarted && !score) {
+        const shouldEndQuiz = window.confirm(
+          'You have switched away from this tab. For security reasons, the quiz will now be submitted automatically. Click OK to continue.'
+        );
+        if (shouldEndQuiz) {
+          handleSubmitQuiz(true);
+        }
+      }
+    };
+
+    // Only add listener during active quiz
+    if (isQuizStarted && !score) {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isQuizStarted, score]);
+
   // Prevent quiz exit during active quiz
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
