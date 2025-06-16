@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface NetworkState {
   isOnline: boolean;
@@ -9,7 +9,19 @@ interface NetworkState {
   lastChecked: Date | null;
 }
 
-export function useNetworkMonitor() {
+interface NetworkContextType extends NetworkState {
+  retryCount: number;
+  retryConnection: () => Promise<boolean>;
+  hasConnectionIssues: boolean;
+}
+
+const NetworkContext = createContext<NetworkContextType | undefined>(undefined);
+
+interface NetworkProviderProps {
+  children: ReactNode;
+}
+
+export function NetworkProvider({ children }: NetworkProviderProps) {
   const [networkState, setNetworkState] = useState<NetworkState>({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     isSlowConnection: false,
@@ -34,7 +46,7 @@ export function useNetworkMonitor() {
       // Consider connection slow if it takes more than 3 seconds for a tiny request
       return duration > 3000;
     } catch (error) {
-      console.warn('Connection speed check failed:', error);
+      // Only log if there's an actual error, not just slow connection
       return true; // Assume slow if we can't check
     }
   };
@@ -54,7 +66,10 @@ export function useNetworkMonitor() {
       clearTimeout(timeout);
       return response.ok;
     } catch (error) {
-      console.warn('Connectivity test failed:', error);
+      // Only log connectivity failures after multiple retries
+      if (retryCount > 1) {
+        console.warn('Connectivity test failed after retries:', error);
+      }
       return false;
     }
   };
@@ -62,7 +77,7 @@ export function useNetworkMonitor() {
   // Handle online/offline events
   useEffect(() => {
     const handleOnline = async () => {
-      console.log('Browser reports online');
+      // Silent network detection - no console logs
       const isSlowConnection = await checkConnectionSpeed();
       setNetworkState(prev => ({
         ...prev,
@@ -74,7 +89,8 @@ export function useNetworkMonitor() {
     };
 
     const handleOffline = () => {
-      console.log('Browser reports offline');
+      // Only log when actually going offline (more important)
+      console.warn('Browser went offline');
       setNetworkState(prev => ({
         ...prev,
         isOnline: false,
@@ -155,10 +171,25 @@ export function useNetworkMonitor() {
     return isConnected;
   };
 
-  return {
+  const contextValue: NetworkContextType = {
     ...networkState,
     retryCount,
     retryConnection,
     hasConnectionIssues: !networkState.isOnline || retryCount > 2
   };
+
+  return (
+    <NetworkContext.Provider value={contextValue}>
+      {children}
+    </NetworkContext.Provider>
+  );
+}
+
+// Hook to use network state
+export function useNetworkMonitor(): NetworkContextType {
+  const context = useContext(NetworkContext);
+  if (context === undefined) {
+    throw new Error('useNetworkMonitor must be used within a NetworkProvider');
+  }
+  return context;
 } 

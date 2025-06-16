@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from '@/lib/authContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { NetworkProvider } from '@/hooks/useNetworkMonitor';
 
 // Force dynamic rendering globally to prevent SSR issues with client components
 export const dynamic = 'force-dynamic';
@@ -61,7 +62,11 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <ErrorBoundary>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <NetworkProvider>
+              {children}
+            </NetworkProvider>
+          </AuthProvider>
         </ErrorBoundary>
       </body>
     </html>
