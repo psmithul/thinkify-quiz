@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
         verification_status: 'pending',
         verification_notes: `Razorpay Order Created: ${order.id}`,
         razorpay_order_id: order.id,
+        payment_method: 'razorpay', // Explicitly set payment method
       });
 
     if (insertError) {

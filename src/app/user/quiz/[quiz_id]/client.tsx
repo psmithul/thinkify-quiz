@@ -450,13 +450,24 @@ export default function QuizClient({
   };
 
   // Razorpay payment handlers
-  const handleRazorpaySuccess = () => {
+  const handleRazorpaySuccess = async () => {
     setShowRazorpayModal(false);
     setPaymentError(null);
+    
+    // Immediately set payment as verified for instant access
     setPaymentVerified(true);
     setPaymentPending(false);
-    // Refresh payment status to ensure consistency
-    checkPaymentStatus();
+    
+    // Show success message
+    setSuccess('Payment successful! You now have access to the quiz.');
+    
+    // Also refresh payment status from database for consistency
+    try {
+      await checkPaymentStatus();
+    } catch (error) {
+      console.error('Error refreshing payment status:', error);
+      // Don't fail the success flow if refresh fails
+    }
   };
 
   const handleRazorpayFailure = (error: string) => {

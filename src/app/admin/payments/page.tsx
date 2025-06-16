@@ -11,6 +11,10 @@ type PaymentWithUser = PaymentVerification & {
   user?: User;
   quiz?: { title: string };
   verifier?: User;
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+  payment_method?: string;
 };
 
 export default function PaymentsAdminPage() {
@@ -325,14 +329,55 @@ export default function PaymentsAdminPage() {
                 {/* Show verification info for processed payments */}
                 {payment.verification_status !== 'pending' && payment.verified_at && (
                   <div className="mt-4 p-3 bg-gray-50 rounded-md">
-                    <p className="text-sm text-gray-600">
-                      {payment.verification_status === 'approved' ? 'Approved' : 'Rejected'} on {formatDate(payment.verified_at)}
-                      {payment.verifier && (
-                        <span className="ml-2">
-                          by {payment.verifier.full_name || payment.verifier.email}
-                        </span>
-                      )}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">
+                          {payment.verification_status === 'approved' ? 'Approved' : 'Rejected'} on {formatDate(payment.verified_at)}
+                          {payment.verifier && (
+                            <span className="ml-2">
+                              by {payment.verifier.full_name || payment.verifier.email}
+                            </span>
+                          )}
+                        </p>
+                        
+                        {/* Show Razorpay auto-approval info */}
+                        {payment.razorpay_payment_id && payment.verification_status === 'approved' && (
+                          <div className="flex items-center mt-2">
+                            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mr-2">
+                              ⚡ Auto-Approved
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              Razorpay Payment ID: {payment.razorpay_payment_id}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Show manual approval info */}
+                        {!payment.razorpay_payment_id && payment.verification_status === 'approved' && (
+                          <div className="flex items-center mt-2">
+                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full mr-2">
+                              👤 Manual Approval
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              UPI Screenshot Verification
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Payment method indicator */}
+                      <div className="text-right">
+                        {payment.razorpay_payment_id ? (
+                          <span className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded border border-blue-200">
+                            💳 Razorpay
+                          </span>
+                        ) : (
+                          <span className="bg-orange-50 text-orange-700 text-xs px-2 py-1 rounded border border-orange-200">
+                            📱 Manual UPI
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

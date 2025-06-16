@@ -59,15 +59,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update payment status to approved
+    // Update payment status to approved automatically (no admin verification needed)
     const { error: updateError } = await supabase
       .from('payment_verifications')
       .update({
-        verification_status: 'approved',
+        verification_status: 'approved', // Automatic approval for verified Razorpay payments
         verified_at: new Date().toISOString(),
-        verification_notes: `Payment verified via Razorpay. Payment ID: ${razorpay_payment_id}`,
+        verification_notes: `Payment automatically verified via Razorpay. Payment ID: ${razorpay_payment_id}. No admin verification required.`,
         razorpay_payment_id: razorpay_payment_id,
         razorpay_signature: razorpay_signature,
+        payment_method: 'razorpay',
       })
       .eq('id', paymentRecord[0].id);
 
@@ -79,13 +80,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log successful payment for audit
-    console.log(`Payment verified successfully for user ${userId}, quiz ${quizId}, payment ${razorpay_payment_id}`);
+    // Log successful automatic approval for audit
+    console.log(`✅ Payment automatically approved for user ${userId}, quiz ${quizId}, payment ${razorpay_payment_id} - No admin verification needed`);
 
     return NextResponse.json({
       success: true,
-      message: 'Payment verified successfully! You now have access to the quiz.',
+      message: 'Payment verified and approved automatically! You now have immediate access to the quiz.',
       paymentId: razorpay_payment_id,
+      autoApproved: true, // Flag to indicate automatic approval
     });
 
   } catch (error: any) {
