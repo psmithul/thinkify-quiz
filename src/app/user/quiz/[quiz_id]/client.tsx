@@ -39,6 +39,7 @@ type Quiz = {
   time_limit_minutes?: number;
   tier_thresholds?: any;
   category?: string;
+  price?: number; // Add price field for free quiz detection
   creator?: {
     id: string;
     full_name?: string;
@@ -609,27 +610,34 @@ export default function QuizClient({
           setEligibilityTier(getEligibilityTier(attemptData.score, quizData?.tier_thresholds));
           setSuccess('You have already completed this quiz!');
         } else {
-          // Check payment verification status for new attempts
-          const { data: paymentData, error: paymentError } = await supabase
-            .from('payment_verifications')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('quiz_id', quizId)
-            .order('created_at', { ascending: false })
-            .maybeSingle();
+          // Check if quiz is free (price = 0), if so, bypass payment verification
+          if (quizData.price === 0) {
+            // Quiz is free, no payment required
+            setPaymentVerified(true);
+            setPaymentPending(false);
+          } else {
+            // Check payment verification status for paid quizzes
+            const { data: paymentData, error: paymentError } = await supabase
+              .from('payment_verifications')
+              .select('*')
+              .eq('user_id', user.id)
+              .eq('quiz_id', quizId)
+              .order('created_at', { ascending: false })
+              .maybeSingle();
 
-          if (!paymentError && paymentData) {
-            if (paymentData.verification_status === 'approved') {
-              setPaymentVerified(true);
-            } else if (paymentData.verification_status === 'pending') {
-              setPaymentPending(true);
-              setPaymentVerified(false);
+            if (!paymentError && paymentData) {
+              if (paymentData.verification_status === 'approved') {
+                setPaymentVerified(true);
+              } else if (paymentData.verification_status === 'pending') {
+                setPaymentPending(true);
+                setPaymentVerified(false);
+              } else {
+                setPaymentVerified(false);
+              }
             } else {
+              // No payment verification found for paid quiz
               setPaymentVerified(false);
             }
-          } else {
-            // No payment verification found
-            setPaymentVerified(false);
           }
         }
       } catch (err) {
@@ -974,11 +982,11 @@ export default function QuizClient({
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <p className="text-gray-600 mt-2">Checking payment status...</p>
               </div>
-            ) : paymentVerified === false && !paymentPending ? (
+            ) : paymentVerified === false && !paymentPending && quiz.price !== 0 ? (
               <div className="space-y-4">
                 <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                   <p className="text-yellow-800 text-sm">
-                    💰 <strong>Payment Required:</strong> You need to pay ₹30 to access this quiz.
+                    💰 <strong>Payment Required:</strong> You need to pay ₹{quiz.price || 30} to access this quiz.
                   </p>
                 </div>
                 
@@ -1038,13 +1046,22 @@ export default function QuizClient({
                 </Button>
               </div>
             ) : (
-              <Button
-                onClick={startQuiz}
-                size="lg"
-                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-              >
-                🚀 Start Quiz
-              </Button>
+              <div className="space-y-4">
+                {quiz.price === 0 && (
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <p className="text-green-800 text-sm">
+                      🆓 <strong>Free Quiz:</strong> This quiz is completely free! No payment required.
+                    </p>
+                  </div>
+                )}
+                <Button
+                  onClick={startQuiz}
+                  size="lg"
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                >
+                  🚀 Start Quiz {quiz.price === 0 ? '(Free)' : ''}
+                </Button>
+              </div>
             )}
           </div>
         ) : (
