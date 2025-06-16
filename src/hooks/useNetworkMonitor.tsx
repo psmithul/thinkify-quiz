@@ -189,7 +189,17 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 export function useNetworkMonitor(): NetworkContextType {
   const context = useContext(NetworkContext);
   if (context === undefined) {
-    throw new Error('useNetworkMonitor must be used within a NetworkProvider');
+    // Provide fallback values instead of throwing error for better resilience
+    console.warn('useNetworkMonitor used outside NetworkProvider, using fallback values');
+    return {
+      isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+      isSlowConnection: false,
+      connectionType: null,
+      lastChecked: null,
+      retryCount: 0,
+      retryConnection: async () => false,
+      hasConnectionIssues: false
+    };
   }
   return context;
 } 

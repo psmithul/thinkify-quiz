@@ -61,13 +61,13 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <ErrorBoundary>
-          <AuthProvider>
-            <NetworkProvider>
+        <NetworkProvider>
+          <ErrorBoundary>
+            <AuthProvider>
               {children}
-            </NetworkProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+            </AuthProvider>
+          </ErrorBoundary>
+        </NetworkProvider>
       </body>
     </html>
   );
