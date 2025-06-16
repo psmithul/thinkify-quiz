@@ -30,6 +30,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  
+  // Initialize states with localStorage values to prevent loading flicker
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [userData, setUserData] = useState<User | null>(null);
@@ -39,6 +41,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Hydrate state from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedUserData = localStorage.getItem('thinkify_user_data');
+        const storedIsAdmin = localStorage.getItem('thinkify_is_admin');
+        const storedIsCreator = localStorage.getItem('thinkify_is_creator');
+        
+        if (storedUserData) {
+          const parsedUserData = JSON.parse(storedUserData);
+          setUserData(parsedUserData);
+          setIsAdmin(storedIsAdmin === 'true');
+          setIsCreator(storedIsCreator === 'true');
+          // If we have stored user data, don't show loading initially
+          setIsLoading(false);
+          setHasInitialized(true);
+        }
+      } catch (error) {
+        console.warn('Error restoring auth state from localStorage:', error);
+      }
+      setIsHydrated(true);
+    }
+  }, []);
+
+  // Persist user data to localStorage
+  const persistUserData = (userData: User | null, isAdmin: boolean, isCreator: boolean) => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (userData) {
+          localStorage.setItem('thinkify_user_data', JSON.stringify(userData));
+          localStorage.setItem('thinkify_is_admin', isAdmin.toString());
+          localStorage.setItem('thinkify_is_creator', isCreator.toString());
+        } else {
+          localStorage.removeItem('thinkify_user_data');
+          localStorage.removeItem('thinkify_is_admin');
+          localStorage.removeItem('thinkify_is_creator');
+        }
+      } catch (error) {
+        console.warn('Error persisting auth state to localStorage:', error);
+      }
+    }
+  };
 
   // Loading timeout - redirect to homepage if auth takes too long
   const { hasTimedOut } = useLoadingTimeout(isLoading, {
@@ -70,13 +116,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (currentSession?.user) {
         setSession(currentSession);
         setUser(currentSession.user);
-        await fetchUserData(currentSession.user);
+        // Call fetchUserData directly without dependency
+        const authUser = currentSession.user;
+        
+        try {
+          // Only show loading if we don't have user data yet and we're hydrated
+          if (!userData && isHydrated && !hasInitialized) {
+            setIsLoading(true);
+          }
+          setError(null);
+          
+          console.log('Fetching user data for:', authUser.email);
+          
+          // Quick retry logic for retryAuth
+          const { data: existingUser, error: fetchError } = await supabase
+            .from('users')
+            .select('id, email, role, full_name, bio, job_title, location, company, linkedin_url, phone, profile_image, created_at, updated_at')
+            .eq('id', authUser.id)
+            .maybeSingle();
+          
+          if (!fetchError && existingUser) {
+            const isAdminUser = existingUser.role === 'admin';
+            const isCreatorUser = existingUser.role === 'creator';
+            
+            setUserData(existingUser);
+            setIsAdmin(isAdminUser);
+            setIsCreator(isCreatorUser);
+            persistUserData(existingUser, isAdminUser, isCreatorUser);
+            setIsLoading(false);
+            setRetryCount(0);
+          } else {
+            throw new Error('Failed to fetch user data during retry');
+          }
+        } catch (userError) {
+          console.error('User data fetch failed during retry:', userError);
+          throw userError;
+        }
       } else {
         setSession(null);
         setUser(null);
         setUserData(null);
         setIsAdmin(false);
         setIsCreator(false);
+        persistUserData(null, false, false);
         setIsLoading(false);
       }
     } catch (retryError) {
@@ -84,78 +166,96 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(retryError instanceof Error ? retryError : new Error('Auth retry failed'));
       setIsLoading(false);
     }
-  }, [retryCount]);
+  }, [retryCount, userData, isHydrated, hasInitialized]);
 
   const fetchUserData = useCallback(async (authUser: SupabaseUser) => {
     try {
-      // Only show loading if we don't have user data yet
-      if (!userData) {
+      // Only show loading if we don't have user data yet and we're hydrated
+      if (!userData && isHydrated && !hasInitialized) {
         setIsLoading(true);
       }
       setError(null);
       
       console.log('Fetching user data for:', authUser.email);
       
-      // Add timeout to prevent hanging - increased to 15 seconds
+      // Shorter timeout to fail faster and use emergency profile
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('User data fetch timeout')), 15000);
+        setTimeout(() => reject(new Error('User data fetch timeout')), 8000); // Reduced to 8 seconds
       });
       
-      // Try to find existing user in database
-      const fetchPromise = supabase
-        .from('users')
-        .select('id, email, role, full_name, bio, job_title, location, company, linkedin_url, phone, profile_image, created_at, updated_at')
-        .eq('id', authUser.id)
-        .maybeSingle();
+      let existingUser = null;
+      let fetchError = null;
       
-      const { data: existingUser, error: fetchError } = await Promise.race([
-        fetchPromise,
-        timeoutPromise
-      ]) as any;
+      try {
+        // Try to find existing user in database
+        const fetchPromise = supabase
+          .from('users')
+          .select('id, email, role, full_name, bio, job_title, location, company, linkedin_url, phone, profile_image, created_at, updated_at')
+          .eq('id', authUser.id)
+          .maybeSingle();
+        
+        const result = await Promise.race([
+          fetchPromise,
+          timeoutPromise
+        ]) as any;
+        
+        existingUser = result.data;
+        fetchError = result.error;
+      } catch (timeoutError) {
+        console.warn('⚠️  Database fetch timed out, using emergency profile');
+        // Don't re-throw, just use emergency profile
+        fetchError = timeoutError;
+      }
       
+      // Handle timeout or other database errors gracefully
       if (fetchError) {
-        console.warn('Database fetch error:', fetchError.message);
-        // Don't throw immediately, try to create emergency profile
-        if (fetchError.message === 'User data fetch timeout') {
-          console.warn('⚠️  Database is slow, creating emergency profile...');
-          // Create emergency profile immediately instead of throwing
-          const emergencyProfile: User = {
-            id: authUser.id,
-            email: authUser.email || 'unknown@example.com',
-            full_name: extractLinkedInName(authUser) || null,
-            bio: null,
-            job_title: null,
-            location: null,
-            company: null,
-            linkedin_url: extractLinkedInUrl(authUser) || null,
-            phone: null,
-            profile_image: extractProfilePicture(authUser) || null,
-            role: 'user',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          setUserData(emergencyProfile);
-          setIsAdmin(false);
-          setIsCreator(false);
-          setIsLoading(false);
-          setRetryCount(0);
-          return;
-        }
-        throw new Error(`Database error: ${fetchError.message}`);
+        console.warn('Database fetch issue:', fetchError.message);
+        
+        // Create emergency profile immediately for any database issue
+        const emergencyProfile: User = {
+          id: authUser.id,
+          email: authUser.email || 'unknown@example.com',
+          full_name: extractLinkedInName(authUser) || null,
+          bio: null,
+          job_title: null,
+          location: null,
+          company: null,
+          linkedin_url: extractLinkedInUrl(authUser) || null,
+          phone: null,
+          profile_image: extractProfilePicture(authUser) || null,
+          role: 'user',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        console.log('✅ Using emergency profile for user:', authUser.email);
+        setUserData(emergencyProfile);
+        setIsAdmin(false);
+        setIsCreator(false);
+        persistUserData(emergencyProfile, false, false);
+        setIsLoading(false);
+        setRetryCount(0);
+        
+        // Set a non-blocking warning
+        setError(new Error('Using offline profile - some features may be limited'));
+        return;
       }
       
       if (existingUser) {
         console.log('✅ Found existing user in database');
+        const isAdminUser = existingUser.role === 'admin';
+        const isCreatorUser = existingUser.role === 'creator';
+        
         setUserData(existingUser);
-        setIsAdmin(existingUser.role === 'admin');
-        setIsCreator(existingUser.role === 'creator');
+        setIsAdmin(isAdminUser);
+        setIsCreator(isCreatorUser);
+        persistUserData(existingUser, isAdminUser, isCreatorUser);
         setIsLoading(false);
         setRetryCount(0); // Reset retry count on success
         return;
       }
       
-      // Create new user profile with LinkedIn data if available
+      // Try to create new user profile, but with timeout protection
       const linkedInName = extractLinkedInName(authUser);
       const linkedInUrl = extractLinkedInUrl(authUser);
       const profilePicture = extractProfilePicture(authUser);
@@ -176,25 +276,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString()
       };
       
-      const createPromise = supabase
-        .from('users')
-        .insert([newUserProfile])
-        .select()
-        .maybeSingle();
+      let createdUser = null;
+      let createError = null;
       
-      const { data: createdUser, error: createError } = await Promise.race([
-        createPromise,
-        timeoutPromise
-      ]) as any;
+      try {
+        const createPromise = supabase
+          .from('users')
+          .insert([newUserProfile])
+          .select()
+          .maybeSingle();
+        
+        const result = await Promise.race([
+          createPromise,
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('User creation timeout')), 8000);
+          })
+        ]) as any;
+        
+        createdUser = result.data;
+        createError = result.error;
+      } catch (timeoutError) {
+        console.warn('⚠️  User creation timed out, using local profile');
+        createError = timeoutError;
+      }
       
       if (createError) {
-        console.warn('Database create error:', createError.message);
-        // Use profile without database but don't throw error
+        console.warn('Database create issue:', createError.message);
+        // Use profile locally even if database insert failed
         setUserData(newUserProfile);
         setIsAdmin(false);
         setIsCreator(false);
+        persistUserData(newUserProfile, false, false);
         setIsLoading(false);
         setRetryCount(0);
+        
+        // Set a non-blocking warning
+        setError(new Error('Using local profile - will sync when database is available'));
         return;
       }
       
@@ -203,18 +320,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserData(createdUser);
         setIsAdmin(false);
         setIsCreator(false);
+        persistUserData(createdUser, false, false);
         setIsLoading(false);
         setRetryCount(0);
       }
       
     } catch (error) {
-      console.error('Auth error:', error);
+      // Final fallback - ensure we never crash
+      console.warn('Auth error caught, creating fallback profile:', error);
       
-      // Create emergency profile to prevent complete failure
-      const emergencyProfile: User = {
+      const fallbackProfile: User = {
         id: authUser.id,
         email: authUser.email || 'unknown@example.com',
-        full_name: extractLinkedInName(authUser) || null,
+        full_name: extractLinkedInName(authUser) || authUser.email?.split('@')[0] || 'User',
         bio: null,
         job_title: null,
         location: null,
@@ -227,19 +345,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString()
       };
       
-      setUserData(emergencyProfile);
+      console.log('✅ Using fallback profile for user:', authUser.email);
+      setUserData(fallbackProfile);
       setIsAdmin(false);
       setIsCreator(false);
+      persistUserData(fallbackProfile, false, false);
       setIsLoading(false);
       
-      // Set error but don't break the app
-      if (error instanceof Error) {
-        setError(error);
-      } else {
-        setError(new Error('Failed to load user data completely'));
-      }
+      // Set a non-blocking error message
+      setError(new Error('Limited connectivity - using offline mode'));
     }
-  }, []);
+  }, [isHydrated, userData, hasInitialized]);
 
   // Helper functions to extract LinkedIn data (OpenID Connect format)
   const extractLinkedInName = (user: SupabaseUser): string | null => {
@@ -293,6 +409,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Don't start auth initialization until we've hydrated from localStorage
+    if (!isHydrated) return;
+    
     let mounted = true;
     let initializationTimeout: NodeJS.Timeout;
     
@@ -301,8 +420,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         console.log('Getting initial session');
         
-        // Only set loading if we haven't initialized yet
-        if (!hasInitialized) {
+        // Only set loading if we don't have stored user data and haven't initialized yet
+        if (!hasInitialized && !userData) {
           setIsLoading(true);
         }
         
@@ -330,8 +449,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await fetchUserData(session.user);
+          try {
+            await fetchUserData(session.user);
+          } catch (fetchError) {
+            console.warn('Error in initial session fetchUserData:', fetchError);
+            // Don't throw - fetchUserData already handles errors internally
+            // This is just a safety net
+          }
         } else {
+          // Clear stored data if no session
+          persistUserData(null, false, false);
           clearTimeout(initializationTimeout);
           setIsLoading(false);
         }
@@ -362,11 +489,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        await fetchUserData(session.user);
+        try {
+          await fetchUserData(session.user);
+        } catch (fetchError) {
+          console.warn('Error in auth state change fetchUserData:', fetchError);
+          // Don't throw - fetchUserData already handles errors internally
+          // This is just a safety net to prevent any unhandled errors from crashing the app
+        }
       } else {
         setUserData(null);
         setIsAdmin(false);
         setIsCreator(false);
+        persistUserData(null, false, false);
         setIsLoading(false);
       }
     });
@@ -376,7 +510,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(initializationTimeout);
       subscription.unsubscribe();
     };
-  }, []); // Remove any dependencies to prevent re-initialization
+  }, [isHydrated]); // Only depend on hydration state to prevent re-initialization
 
   const signInWithEmail = async (email: string, password: string): Promise<{ success: boolean; redirectTo?: string }> => {
     try {
@@ -481,6 +615,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(false);
       setIsCreator(false);
       
+      // Clear localStorage
+      persistUserData(null, false, false);
+      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
@@ -509,22 +646,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
   };
 
-  // Show error state if there's a critical error
+  // Show error state only for critical errors that prevent app functionality
+  // Don't show error fallback if we have user data (even with warnings)
   if (error && !isLoading && !userData) {
-    return (
-      <AuthContext.Provider value={value}>
-        <ErrorFallback
-          error={error}
-          resetError={() => {
-            setError(null);
-            retryAuth();
-          }}
-          showDetails={process.env.NODE_ENV === 'development'}
-          autoRetry={false} // Manual retry only for auth errors
-          redirectDelay={20000} // 20 seconds before redirect
-        />
-      </AuthContext.Provider>
-    );
+    // Check if it's a database connectivity issue
+    const isDatabaseIssue = error.message.includes('offline') || 
+                           error.message.includes('timeout') || 
+                           error.message.includes('Limited connectivity') ||
+                           error.message.includes('Using offline profile');
+    
+    // For database issues, still try to render the app normally
+    if (isDatabaseIssue) {
+      console.log('Database connectivity issue detected, but continuing with app...');
+      // Continue to render the app normally
+    } else {
+      // Only show error fallback for non-database critical errors
+      return (
+        <AuthContext.Provider value={value}>
+          <ErrorFallback
+            error={error}
+            resetError={() => {
+              setError(null);
+              retryAuth();
+            }}
+            showDetails={process.env.NODE_ENV === 'development'}
+            autoRetry={false} // Manual retry only for auth errors
+            redirectDelay={20000} // 20 seconds before redirect
+          />
+        </AuthContext.Provider>
+      );
+    }
   }
 
   // Show loading state with timeout
