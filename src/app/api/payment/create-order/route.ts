@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: userId,
         quiz_id: quizId,
-        amount: PAYMENT_CONFIG.amount / 100, // Store in rupees
+        amount: PAYMENT_CONFIG.amount / 100, // Store in rupees (column is 'amount', not 'amount_paid')
         verification_status: 'pending',
         verification_notes: `Razorpay Order Created: ${order.id}`,
         razorpay_order_id: order.id,

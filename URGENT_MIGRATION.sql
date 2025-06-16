@@ -1,7 +1,8 @@
--- Add Razorpay-specific fields to payment_verifications table
--- Run this in your Supabase SQL Editor
+-- URGENT: Run this SQL in Supabase SQL Editor to fix payment system
+-- Go to: https://shmnqswfxezpgpbscmke.supabase.co
+-- Navigate to: SQL Editor (left sidebar)
+-- Copy and paste this entire file and click "Run"
 
--- Add Razorpay fields to payment_verifications table
 ALTER TABLE payment_verifications 
 ADD COLUMN IF NOT EXISTS razorpay_order_id TEXT,
 ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT,
@@ -16,17 +17,21 @@ ON payment_verifications(razorpay_order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_verifications_razorpay_payment 
 ON payment_verifications(razorpay_payment_id);
 
--- Add check constraint to ensure either screenshot OR razorpay payment details exist
--- This allows both manual (screenshot) and automated (razorpay) payment methods
--- Comment: We'll allow both methods to coexist during transition period
+CREATE INDEX IF NOT EXISTS idx_payment_verifications_payment_method 
+ON payment_verifications(payment_method);
 
--- Create a function to automatically approve Razorpay payments when signature is added
+-- Update existing records to have payment_method = 'manual'
+UPDATE payment_verifications 
+SET payment_method = 'manual' 
+WHERE payment_method IS NULL;
+
+-- Create auto-approval function for Razorpay payments
 CREATE OR REPLACE FUNCTION auto_approve_razorpay_payment()
 RETURNS TRIGGER AS $$
 BEGIN
   -- If razorpay_signature is being added and verification_status is still pending
   IF NEW.razorpay_signature IS NOT NULL 
-     AND OLD.razorpay_signature IS NULL 
+     AND (OLD.razorpay_signature IS NULL OR OLD.razorpay_signature = '') 
      AND NEW.verification_status = 'pending' THEN
     
     NEW.verification_status = 'approved';
@@ -45,12 +50,8 @@ CREATE TRIGGER trigger_auto_approve_razorpay
   FOR EACH ROW
   EXECUTE FUNCTION auto_approve_razorpay_payment();
 
--- Update existing payment_verifications table to handle both payment methods
-COMMENT ON COLUMN payment_verifications.payment_screenshot_url IS 'For manual UPI payments (legacy method)';
-COMMENT ON COLUMN payment_verifications.razorpay_order_id IS 'Razorpay order ID for automated payments';
-COMMENT ON COLUMN payment_verifications.razorpay_payment_id IS 'Razorpay payment ID for automated payments';
-COMMENT ON COLUMN payment_verifications.razorpay_signature IS 'Razorpay signature for payment verification';
-COMMENT ON COLUMN payment_verifications.payment_method IS 'Payment method used: razorpay or manual';
-
--- Show current table structure
-\d payment_verifications; 
+-- Test the migration by checking table structure
+SELECT column_name, data_type, is_nullable, column_default 
+FROM information_schema.columns 
+WHERE table_name = 'payment_verifications' 
+ORDER BY ordinal_position; 
