@@ -502,7 +502,15 @@ export default function HomePage() {
               <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-8 text-xs sm:text-sm text-slate-500">
                 <Link href="/terms" className="hover:text-slate-700 transition-colors">Terms of Service</Link>
                 <Link href="/privacy" className="hover:text-slate-700 transition-colors">Privacy Policy</Link>
-                <Link href="/contact" className="hover:text-slate-700 transition-colors">Contact Support</Link>
+                <Link href="/cancellation-refund" className="hover:text-slate-700 transition-colors">Cancellation & Refund</Link>
+                <Link 
+                  href="https://connect.thinkify.io" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-slate-700 transition-colors"
+                >
+                  Contact Support
+                </Link>
               </div>
             </div>
           </div>

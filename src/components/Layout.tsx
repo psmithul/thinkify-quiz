@@ -471,7 +471,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8">
           <div className="py-6 sm:py-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-              <div className="col-span-1 sm:col-span-2">
+              <div className="col-span-1 sm:col-span-2 lg:col-span-1">
                 <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                   <div className="text-xl sm:text-2xl">🧠</div>
                   <span className="text-lg sm:text-xl font-bold text-gray-900">Thinkify</span>
@@ -513,12 +513,58 @@ export function Layout({ children }: LayoutProps) {
                   </li>
                 </ul>
               </div>
+
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Legal</h4>
+                <ul className="space-y-2 sm:space-y-3">
+                  <li>
+                    <Link href="/terms" className="text-gray-600 hover:text-purple-600 transition-colors text-sm sm:text-base">
+                      Terms of Service
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/privacy" className="text-gray-600 hover:text-purple-600 transition-colors text-sm sm:text-base">
+                      Privacy Policy
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/cancellation-refund" className="text-gray-600 hover:text-purple-600 transition-colors text-sm sm:text-base">
+                      Cancellation & Refund
+                    </Link>
+                  </li>
+                  <li>
+                    <Link 
+                      href="https://connect.thinkify.io" 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-600 hover:text-purple-600 transition-colors text-sm sm:text-base"
+                    >
+                      Contact Us ↗
+                    </Link>
+                  </li>
+                </ul>
+              </div>
             </div>
             
-            <div className="border-t border-gray-200 mt-6 sm:mt-8 pt-4 sm:pt-6 text-center">
-              <p className="text-gray-500 text-xs sm:text-sm">
-                &copy; {new Date().getFullYear()} Thinkify Quiz Platform. Built with ❤️ for learners everywhere.
-              </p>
+            <div className="border-t border-gray-200 mt-6 sm:mt-8 pt-4 sm:pt-6">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                <p className="text-gray-500 text-xs sm:text-sm text-center sm:text-left">
+                  &copy; {new Date().getFullYear()} Thinkify Quiz Platform. Built with ❤️ for learners everywhere.
+                </p>
+                <div className="flex flex-wrap justify-center sm:justify-end items-center gap-4 text-xs sm:text-sm text-gray-500">
+                  <Link href="/terms" className="hover:text-purple-600 transition-colors">Terms</Link>
+                  <Link href="/privacy" className="hover:text-purple-600 transition-colors">Privacy</Link>
+                  <Link href="/cancellation-refund" className="hover:text-purple-600 transition-colors">Refunds</Link>
+                  <Link 
+                    href="https://connect.thinkify.io" 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-purple-600 transition-colors"
+                  >
+                    Support
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </div>
