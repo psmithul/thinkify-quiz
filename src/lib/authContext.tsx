@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isCreator, setIsCreator] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // Loading timeout - redirect to homepage if auth takes too long
   const { hasTimedOut } = useLoadingTimeout(isLoading, {
@@ -87,7 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = useCallback(async (authUser: SupabaseUser) => {
     try {
-      setIsLoading(true);
+      // Only show loading if we don't have user data yet
+      if (!userData) {
+        setIsLoading(true);
+      }
       setError(null);
       
       console.log('Fetching user data for:', authUser.email);
@@ -297,11 +301,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         console.log('Getting initial session');
         
+        // Only set loading if we haven't initialized yet
+        if (!hasInitialized) {
+          setIsLoading(true);
+        }
+        
         // Set a fallback timeout to ensure loading never hangs forever
         initializationTimeout = setTimeout(() => {
           if (mounted) {
             console.warn('Session initialization timeout, clearing loading state');
             setIsLoading(false);
+            setHasInitialized(true);
           }
         }, 10000); // 10 second timeout
 
@@ -312,6 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('Initial session error:', error);
           clearTimeout(initializationTimeout);
           setIsLoading(false);
+          setHasInitialized(true);
           return;
         }
         
@@ -324,22 +335,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearTimeout(initializationTimeout);
           setIsLoading(false);
         }
+        
+        setHasInitialized(true);
       } catch (error) {
         console.error('Session initialization error:', error);
         if (mounted) {
           clearTimeout(initializationTimeout);
           setIsLoading(false);
+          setHasInitialized(true);
         }
       }
     };
 
-    // Only initialize when there's no user
-    if (!user) {
-      getInitialSession();
-    } else {
-      // If user exists, just clear loading
-      setIsLoading(false);
-    }
+    // Always try to get initial session, but only show loading on first init
+    getInitialSession();
 
     // Listen for auth changes
     const {
@@ -367,7 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(initializationTimeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Remove any dependencies to prevent re-initialization
 
   const signInWithEmail = async (email: string, password: string): Promise<{ success: boolean; redirectTo?: string }> => {
     try {
