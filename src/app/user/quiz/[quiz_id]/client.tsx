@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import QuizTimer from '@/components/QuizTimer';
+import RazorpayPayment from '@/components/RazorpayPayment';
 import PaymentVerificationComponent from '@/components/PaymentVerification';
 
 // Updated question type to match quiz_questions table
@@ -353,6 +354,8 @@ export default function QuizClient({
   // Payment verification state
   const [paymentVerified, setPaymentVerified] = useState<boolean | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRazorpayModal, setShowRazorpayModal] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentPending, setPaymentPending] = useState(false);
 
   useEffect(() => {
@@ -444,6 +447,59 @@ export default function QuizClient({
   const handlePaymentModalCancel = () => {
     setShowPaymentModal(false);
     router.push('/browse');
+  };
+
+  // Razorpay payment handlers
+  const handleRazorpaySuccess = () => {
+    setShowRazorpayModal(false);
+    setPaymentError(null);
+    setPaymentVerified(true);
+    setPaymentPending(false);
+    // Refresh payment status to ensure consistency
+    checkPaymentStatus();
+  };
+
+  const handleRazorpayFailure = (error: string) => {
+    setPaymentError(error);
+    setShowRazorpayModal(false);
+  };
+
+  const handleRazorpayCancel = () => {
+    setShowRazorpayModal(false);
+    setPaymentError(null);
+  };
+
+  // Helper function to check payment status
+  const checkPaymentStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payment_verifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('quiz_id', quizId)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+
+      if (!paymentError && paymentData) {
+        if (paymentData.verification_status === 'approved') {
+          setPaymentVerified(true);
+          setPaymentPending(false);
+        } else if (paymentData.verification_status === 'pending') {
+          setPaymentPending(true);
+          setPaymentVerified(false);
+        } else {
+          setPaymentVerified(false);
+          setPaymentPending(false);
+        }
+      } else {
+        setPaymentVerified(false);
+        setPaymentPending(false);
+      }
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+    }
   };
 
   useEffect(() => {
@@ -914,13 +970,46 @@ export default function QuizClient({
                     💰 <strong>Payment Required:</strong> You need to pay ₹30 to access this quiz.
                   </p>
                 </div>
-                <Button
-                  onClick={() => setShowPaymentModal(true)}
-                  size="lg"
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-                >
-                  💳 Pay ₹30 to Start Quiz
-                </Button>
+                
+                {/* Payment Error Display */}
+                {paymentError && (
+                  <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                    <div className="flex items-center">
+                      <span className="text-red-500 text-xl mr-2">⚠️</span>
+                      <p className="text-red-800 text-sm">{paymentError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Primary Payment Option - Razorpay */}
+                <div className="space-y-3">
+                  <Button
+                    onClick={() => setShowRazorpayModal(true)}
+                    size="lg"
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <span className="mr-2">💳</span>
+                    Pay ₹30 Securely (Recommended)
+                  </Button>
+
+                  {/* Alternative Payment Option */}
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500 mb-2">Or</p>
+                    <Button
+                      onClick={() => setShowPaymentModal(true)}
+                      size="lg"
+                      variant="outline"
+                      className="w-full border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50"
+                    >
+                      <span className="mr-2">📱</span>
+                      Pay via UPI Screenshot
+                    </Button>
+                  </div>
+                  
+                  <div className="text-center text-xs text-gray-500 mt-2">
+                    <p>Secure payment processing by Razorpay • Instant access</p>
+                  </div>
+                </div>
               </div>
             ) : paymentPending ? (
               <div className="space-y-4">
@@ -1034,7 +1123,23 @@ export default function QuizClient({
         )}
       </div>
       
-      {/* Payment Verification Modal */}
+      {/* Razorpay Payment Modal */}
+      {showRazorpayModal && user && (
+        <RazorpayPayment
+          quizId={quizId}
+          userId={user.id}
+          userDetails={{
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+            email: user.email || '',
+            phone: user.user_metadata?.phone || user.phone || '',
+          }}
+          onPaymentSuccess={handleRazorpaySuccess}
+          onPaymentFailure={handleRazorpayFailure}
+          onCancel={handleRazorpayCancel}
+        />
+      )}
+
+      {/* Manual Payment Verification Modal */}
       {showPaymentModal && user && (
         <PaymentVerificationComponent
           quizId={quizId}
