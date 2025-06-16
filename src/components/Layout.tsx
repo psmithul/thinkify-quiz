@@ -533,6 +533,11 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </li>
                   <li>
+                    <Link href="/delivery-policy" className="text-gray-600 hover:text-purple-600 transition-colors text-sm sm:text-base">
+                      Delivery Policy
+                    </Link>
+                  </li>
+                  <li>
                     <Link 
                       href="https://connect.thinkify.io" 
                       target="_blank"
@@ -555,6 +560,7 @@ export function Layout({ children }: LayoutProps) {
                   <Link href="/terms" className="hover:text-purple-600 transition-colors">Terms</Link>
                   <Link href="/privacy" className="hover:text-purple-600 transition-colors">Privacy</Link>
                   <Link href="/cancellation-refund" className="hover:text-purple-600 transition-colors">Refunds</Link>
+                  <Link href="/delivery-policy" className="hover:text-purple-600 transition-colors">Delivery</Link>
                   <Link 
                     href="https://connect.thinkify.io" 
                     target="_blank"

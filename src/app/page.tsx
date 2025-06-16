@@ -503,6 +503,7 @@ export default function HomePage() {
                 <Link href="/terms" className="hover:text-slate-700 transition-colors">Terms of Service</Link>
                 <Link href="/privacy" className="hover:text-slate-700 transition-colors">Privacy Policy</Link>
                 <Link href="/cancellation-refund" className="hover:text-slate-700 transition-colors">Cancellation & Refund</Link>
+                <Link href="/delivery-policy" className="hover:text-slate-700 transition-colors">Delivery Policy</Link>
                 <Link 
                   href="https://connect.thinkify.io" 
                   target="_blank"
