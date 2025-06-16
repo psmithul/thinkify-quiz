@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabaseClient';
 import { formatErrorMessage } from '@/utils/errorHandler';
 import QuizTimer from '@/components/QuizTimer';
+import PaymentVerificationComponent from '@/components/PaymentVerification';
 
 // Updated question type to match quiz_questions table
 type Question = {
@@ -348,6 +349,11 @@ export default function QuizClient({
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [showExitWarning, setShowExitWarning] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Payment verification state
+  const [paymentVerified, setPaymentVerified] = useState<boolean | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentPending, setPaymentPending] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -427,6 +433,18 @@ export default function QuizClient({
       await handleSubmitQuiz(true); // Pass true to indicate auto-submission
     }
   }, [isSubmitting, isQuizStarted]);
+
+  // Payment verification handlers
+  const handlePaymentSubmitted = () => {
+    setShowPaymentModal(false);
+    setPaymentPending(true);
+    setPaymentVerified(false);
+  };
+
+  const handlePaymentModalCancel = () => {
+    setShowPaymentModal(false);
+    router.push('/browse');
+  };
 
   useEffect(() => {
     async function fetchQuizData() {
@@ -523,6 +541,29 @@ export default function QuizClient({
           setResultId(attemptData.id);
           setEligibilityTier(getEligibilityTier(attemptData.score, quizData?.tier_thresholds));
           setSuccess('You have already completed this quiz!');
+        } else {
+          // Check payment verification status for new attempts
+          const { data: paymentData, error: paymentError } = await supabase
+            .from('payment_verifications')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('quiz_id', quizId)
+            .order('created_at', { ascending: false })
+            .maybeSingle();
+
+          if (!paymentError && paymentData) {
+            if (paymentData.verification_status === 'approved') {
+              setPaymentVerified(true);
+            } else if (paymentData.verification_status === 'pending') {
+              setPaymentPending(true);
+              setPaymentVerified(false);
+            } else {
+              setPaymentVerified(false);
+            }
+          } else {
+            // No payment verification found
+            setPaymentVerified(false);
+          }
         }
       } catch (err) {
         setError(formatErrorMessage(err));
@@ -860,13 +901,51 @@ export default function QuizClient({
                 </div>
               )}
             </div>
-            <Button
-              onClick={startQuiz}
-              size="lg"
-              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-            >
-              🚀 Start Quiz
-            </Button>
+            {/* Payment Verification Logic */}
+            {paymentVerified === null ? (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="text-gray-600 mt-2">Checking payment status...</p>
+              </div>
+            ) : paymentVerified === false && !paymentPending ? (
+              <div className="space-y-4">
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <p className="text-yellow-800 text-sm">
+                    💰 <strong>Payment Required:</strong> You need to pay ₹30 to access this quiz.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => setShowPaymentModal(true)}
+                  size="lg"
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                >
+                  💳 Pay ₹30 to Start Quiz
+                </Button>
+              </div>
+            ) : paymentPending ? (
+              <div className="space-y-4">
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                  <p className="text-orange-800 text-sm">
+                    ⏳ <strong>Payment Under Review:</strong> Your payment is being verified by our admin. Please wait for approval.
+                  </p>
+                </div>
+                <Button
+                  disabled
+                  size="lg"
+                  className="bg-gray-400 cursor-not-allowed"
+                >
+                  ⏳ Awaiting Payment Verification
+                </Button>
+              </div>
+            ) : (
+              <Button
+                onClick={startQuiz}
+                size="lg"
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+              >
+                🚀 Start Quiz
+              </Button>
+            )}
           </div>
         ) : (
           // Quiz questions interface
@@ -954,6 +1033,16 @@ export default function QuizClient({
           </div>
         )}
       </div>
+      
+      {/* Payment Verification Modal */}
+      {showPaymentModal && user && (
+        <PaymentVerificationComponent
+          quizId={quizId}
+          userId={user.id}
+          onPaymentSubmitted={handlePaymentSubmitted}
+          onCancel={handlePaymentModalCancel}
+        />
+      )}
     </Layout>
   );
 } 

@@ -18,6 +18,54 @@ export default function AdminDashboard() {
   const { userData, isLoading } = useAuth();
   const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>('admin');
+  const [paymentStats, setPaymentStats] = useState({
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    total: 0
+  });
+
+  // Fetch payment statistics
+  useEffect(() => {
+    const fetchPaymentStats = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('payment_verifications')
+          .select('verification_status');
+
+        if (error) {
+          console.error('Error fetching payment stats:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+            query: 'payment_verifications.verification_status'
+          });
+          return;
+        }
+
+        const stats = data.reduce((acc: any, payment: any) => {
+          if (payment.verification_status === 'pending') acc.pending++;
+          else if (payment.verification_status === 'approved') acc.approved++;
+          else if (payment.verification_status === 'rejected') acc.rejected++;
+          acc.total++;
+          return acc;
+        }, { pending: 0, approved: 0, rejected: 0, total: 0 });
+
+        setPaymentStats(stats);
+      } catch (error) {
+        console.error('Error fetching payment statistics:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          error: error,
+          stack: error instanceof Error ? error.stack : undefined
+        });
+      }
+    };
+
+    if (userData?.role === 'admin') {
+      fetchPaymentStats();
+    }
+  }, [userData]);
 
   if (isLoading) {
     return (
@@ -165,24 +213,24 @@ export default function AdminDashboard() {
           className="grid grid-cols-1 md:grid-cols-4 gap-6"
         >
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <div className="text-2xl font-bold text-purple-600">∞</div>
-            <div className="text-sm text-gray-600">Admin Access</div>
-            <div className="text-xs text-gray-500 mt-1">Full Platform Control</div>
+            <div className="text-2xl font-bold text-yellow-600">{paymentStats.pending}</div>
+            <div className="text-sm text-gray-600">Pending Payments</div>
+            <div className="text-xs text-gray-500 mt-1">Awaiting Verification</div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <div className="text-2xl font-bold text-blue-600">All</div>
-            <div className="text-sm text-gray-600">Quiz Access</div>
-            <div className="text-xs text-gray-500 mt-1">View & Manage All Quizzes</div>
+            <div className="text-2xl font-bold text-green-600">{paymentStats.approved}</div>
+            <div className="text-sm text-gray-600">Approved Payments</div>
+            <div className="text-xs text-gray-500 mt-1">Verified & Active</div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <div className="text-2xl font-bold text-green-600">All</div>
-            <div className="text-sm text-gray-600">User Data</div>
-            <div className="text-xs text-gray-500 mt-1">Complete Analytics Access</div>
+            <div className="text-2xl font-bold text-red-600">{paymentStats.rejected}</div>
+            <div className="text-sm text-gray-600">Rejected Payments</div>
+            <div className="text-xs text-gray-500 mt-1">Declined Verifications</div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <div className="text-2xl font-bold text-orange-600">All</div>
-            <div className="text-sm text-gray-600">Features</div>
-            <div className="text-xs text-gray-500 mt-1">Every Platform Feature</div>
+            <div className="text-2xl font-bold text-purple-600">{paymentStats.total}</div>
+            <div className="text-sm text-gray-600">Total Payments</div>
+            <div className="text-xs text-gray-500 mt-1">All Payment Attempts</div>
           </div>
         </motion.div>
 
@@ -195,6 +243,18 @@ export default function AdminDashboard() {
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Button
+              onClick={() => router.push('/admin/payments')}
+              variant="outline"
+              className="w-full bg-yellow-50 border-yellow-200 hover:bg-yellow-100"
+            >
+              💳 Payment Verifications
+              {paymentStats.pending > 0 && (
+                <span className="ml-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
+                  {paymentStats.pending}
+                </span>
+              )}
+            </Button>
             <Button
               onClick={() => router.push('/admin/companies')}
               variant="outline"

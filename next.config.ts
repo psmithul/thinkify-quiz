@@ -12,7 +12,6 @@ const nextConfig: NextConfig = {
   // Add other configuration options here if needed
   poweredByHeader: false,
   reactStrictMode: true,
-  swcMinify: true,
 };
 
 export default nextConfig;

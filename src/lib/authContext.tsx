@@ -112,9 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('Fetching user data for:', authUser.email);
       
-      // Add timeout to prevent hanging
+      // Add timeout to prevent hanging - increased to 15 seconds
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('User data fetch timeout')), 8000);
+        setTimeout(() => reject(new Error('User data fetch timeout')), 15000);
       });
       
       // Try to find existing user in database
@@ -131,6 +131,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (fetchError) {
         console.warn('Database fetch error:', fetchError.message);
+        // Don't throw immediately, try to create emergency profile
+        if (fetchError.message === 'User data fetch timeout') {
+          console.warn('⚠️  Database is slow, creating emergency profile...');
+          // Create emergency profile immediately instead of throwing
+          const emergencyProfile: User = {
+            id: authUser.id,
+            email: authUser.email || 'unknown@example.com',
+            full_name: extractLinkedInName(authUser) || null,
+            bio: null,
+            job_title: null,
+            location: null,
+            company: null,
+            linkedin_url: extractLinkedInUrl(authUser) || null,
+            phone: null,
+            profile_image: extractProfilePicture(authUser) || null,
+            role: 'user',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          setUserData(emergencyProfile);
+          setIsAdmin(false);
+          setIsCreator(false);
+          setIsLoading(false);
+          setRetryCount(0);
+          return;
+        }
         throw new Error(`Database error: ${fetchError.message}`);
       }
       

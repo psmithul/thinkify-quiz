@@ -149,6 +149,26 @@ export type Payment = {
   amount: number;
   status: 'pending' | 'completed' | 'failed';
   paid_at: string | null;
+  payment_screenshot_url?: string;
+  verification_status?: 'pending' | 'approved' | 'rejected';
+  verified_by?: string;
+  verified_at?: string;
+  verification_notes?: string;
+};
+
+export type PaymentVerification = {
+  id: string;
+  payment_id?: string;
+  user_id: string;
+  quiz_id: string;
+  amount: number;
+  payment_screenshot_url?: string;
+  verification_status: 'pending' | 'approved' | 'rejected';
+  verified_by?: string;
+  verified_at?: string;
+  verification_notes?: string;
+  created_at: string;
+  updated_at?: string;
 };
 
 export type Follow = {
