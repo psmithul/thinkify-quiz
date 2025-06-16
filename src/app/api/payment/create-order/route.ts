@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRazorpayInstance, PAYMENT_CONFIG, generatePaymentReceipt, handleRazorpayError } from '@/lib/razorpay';
 import { supabase } from '@/lib/supabaseClient';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already has a verified payment for this quiz
+    // Check if user already has a verified payment for this quiz (using regular client)
     const { data: existingPayment, error: checkError } = await supabase
       .from('payment_verifications')
       .select('*')
@@ -57,8 +58,8 @@ export async function POST(request: NextRequest) {
     const razorpay = getRazorpayInstance();
     const order = await razorpay.orders.create(orderOptions);
 
-    // Store the order in our database for tracking
-    const { error: insertError } = await supabase
+    // Store the order in our database for tracking (using admin client to bypass RLS)
+    const { error: insertError } = await supabaseAdmin
       .from('payment_verifications')
       .insert({
         user_id: userId,

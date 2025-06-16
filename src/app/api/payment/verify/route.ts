@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPaymentSignature, handleRazorpayError } from '@/lib/razorpay';
 import { supabase } from '@/lib/supabaseClient';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,8 +36,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find the payment record
-    const { data: paymentRecord, error: findError } = await supabase
+    // Find the payment record (using admin client to bypass RLS)
+    const { data: paymentRecord, error: findError } = await supabaseAdmin
       .from('payment_verifications')
       .select('*')
       .eq('user_id', userId)
@@ -59,8 +60,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update payment status to approved automatically (no admin verification needed)
-    const { error: updateError } = await supabase
+    // Update payment status to approved automatically (using admin client to bypass RLS)
+    const { error: updateError } = await supabaseAdmin
       .from('payment_verifications')
       .update({
         verification_status: 'approved', // Automatic approval for verified Razorpay payments

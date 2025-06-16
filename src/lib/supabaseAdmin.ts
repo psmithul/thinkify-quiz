@@ -53,7 +53,20 @@ try {
   });
 }
 
-export const supabaseAdmin = adminClient;
+// Admin client for server-side operations that need to bypass RLS
+export const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
+
+// Regular client for user operations
+export { supabase } from './supabaseClient';
 
 // Helper function to create admin operations with proper error handling
 export function createAdminOperation() {
