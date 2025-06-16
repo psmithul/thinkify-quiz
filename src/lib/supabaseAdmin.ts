@@ -1,14 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl) {
   throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable');
 }
 
 if (!supabaseServiceKey) {
-  throw new Error('Missing SUPABASE_SERVICE_KEY environment variable. This is required for admin operations.');
+  throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable. This is required for admin operations.');
 }
 
 // Admin client - production ready
@@ -17,8 +17,8 @@ let adminClient;
 
 try {
   // Try to create admin client with service key
-  if (process.env.SUPABASE_SERVICE_KEY && process.env.SUPABASE_SERVICE_KEY !== process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    adminClient = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_KEY, {
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    adminClient = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -26,6 +26,7 @@ try {
       },
     });
     isUsingServiceKey = true;
+    console.log('✅ Using SERVICE ROLE KEY for admin operations - RLS bypassed');
   } else {
     // Fallback to anon client (RLS disabled for development)
     adminClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
@@ -41,6 +42,7 @@ try {
         }
       }
     });
+    console.log('⚠️ Using ANON KEY for admin operations - RLS may block operations');
   }
 } catch (error) {
   // Final fallback
@@ -51,6 +53,7 @@ try {
       detectSessionInUrl: false,
     },
   });
+  console.log('❌ Fallback to ANON KEY - RLS may block operations');
 }
 
 // Admin client for server-side operations that need to bypass RLS
