@@ -359,12 +359,6 @@ export default function QuizClient({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentPending, setPaymentPending] = useState(false);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/login');
-    }
-  }, [authLoading, user, router]);
-
   // Fullscreen change detection
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -529,23 +523,24 @@ export default function QuizClient({
           setPaymentVerified(false);
         } else {
           setPaymentVerified(false);
-          setPaymentPending(false);
         }
       } else {
+        // No payment verification found for paid quiz
         setPaymentVerified(false);
-        setPaymentPending(false);
       }
     } catch (error) {
       console.error('Error checking payment status:', error);
+      setPaymentVerified(false);
     }
   };
 
   useEffect(() => {
     async function fetchQuizData() {
-      if (!user) return;
+      // Allow anonymous users to view quiz details - remove early return
+      // if (!user) return;
 
       try {
-        // Fetch quiz details
+        // Fetch quiz details (now works for anonymous users too)
         const { data: quizData, error: quizError } = await supabase
           .from('quizzes')
           .select('*')
@@ -576,7 +571,7 @@ export default function QuizClient({
           creator: creatorInfo
         });
 
-        // Fetch questions from quiz_questions table
+        // Fetch questions from quiz_questions table (works for anonymous users)
         const { data: questionsData, error: questionsError } = await supabase
           .from('quiz_questions')
           .select('*')
@@ -621,50 +616,57 @@ export default function QuizClient({
         
         setQuestions(questionsWithOptions);
 
-        // Check if user has already completed this quiz
-        const { data: attemptData, error: attemptError } = await supabase
-          .from('quiz_attempts')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('quiz_id', quizId)
-          .maybeSingle();
+        // Only check for existing attempts if user is authenticated
+        if (user) {
+          // Check if user has already completed this quiz
+          const { data: attemptData, error: attemptError } = await supabase
+            .from('quiz_attempts')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('quiz_id', quizId)
+            .maybeSingle();
 
-        if (!attemptError && attemptData) {
-          // User has already completed this quiz
-          setScore(attemptData.score);
-          setResultId(attemptData.id);
-          setEligibilityTier(getEligibilityTier(attemptData.score, quizData?.tier_thresholds));
-          setSuccess('You have already completed this quiz!');
-        } else {
-          // Check if quiz is free (price = 0), if so, bypass payment verification
-          if (quizData.price === 0) {
-            // Quiz is free, no payment required
-            setPaymentVerified(true);
-            setPaymentPending(false);
+          if (!attemptError && attemptData) {
+            // User has already completed this quiz
+            setScore(attemptData.score);
+            setResultId(attemptData.id);
+            setEligibilityTier(getEligibilityTier(attemptData.score, quizData?.tier_thresholds));
+            setSuccess('You have already completed this quiz!');
           } else {
-            // Check payment verification status for paid quizzes
-            const { data: paymentData, error: paymentError } = await supabase
-              .from('payment_verifications')
-              .select('*')
-              .eq('user_id', user.id)
-              .eq('quiz_id', quizId)
-              .order('created_at', { ascending: false })
-              .maybeSingle();
+            // Check if quiz is free (price = 0), if so, bypass payment verification
+            if (quizData.price === 0) {
+              // Quiz is free, no payment required
+              setPaymentVerified(true);
+              setPaymentPending(false);
+            } else {
+              // Check payment verification status for paid quizzes
+              const { data: paymentData, error: paymentError } = await supabase
+                .from('payment_verifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('quiz_id', quizId)
+                .order('created_at', { ascending: false })
+                .maybeSingle();
 
-            if (!paymentError && paymentData) {
-              if (paymentData.verification_status === 'approved') {
-                setPaymentVerified(true);
-              } else if (paymentData.verification_status === 'pending') {
-                setPaymentPending(true);
-                setPaymentVerified(false);
+              if (!paymentError && paymentData) {
+                if (paymentData.verification_status === 'approved') {
+                  setPaymentVerified(true);
+                } else if (paymentData.verification_status === 'pending') {
+                  setPaymentPending(true);
+                  setPaymentVerified(false);
+                } else {
+                  setPaymentVerified(false);
+                }
               } else {
+                // No payment verification found for paid quiz
                 setPaymentVerified(false);
               }
-            } else {
-              // No payment verification found for paid quiz
-              setPaymentVerified(false);
             }
           }
+        } else {
+          // For anonymous users, set payment verification to false to show login prompt
+          setPaymentVerified(false);
+          setPaymentPending(false);
         }
       } catch (err) {
         setError(formatErrorMessage(err));
@@ -673,9 +675,8 @@ export default function QuizClient({
       }
     }
 
-    if (user) {
-      fetchQuizData();
-    }
+    // Always fetch quiz data, regardless of authentication status
+    fetchQuizData();
   }, [user, quizId, router]);
 
   function handleAnswerChange(questionId: string, answer: string) {
@@ -1002,8 +1003,36 @@ export default function QuizClient({
                 </div>
               )}
             </div>
-            {/* Payment Verification Logic */}
-            {paymentVerified === null ? (
+            {/* Authentication and Payment Verification Logic */}
+            {!user ? (
+              // Show login prompt for anonymous users
+              <div className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-blue-800 text-sm">
+                    🔐 <strong>Login Required:</strong> You need to log in to take this quiz.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => router.push('/auth/login')}
+                  size="lg"
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  <span className="mr-2">🔑</span>
+                  Login to Take Quiz
+                </Button>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">
+                    Don't have an account?{' '}
+                    <button
+                      onClick={() => router.push('/auth/signup')}
+                      className="text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Sign up here
+                    </button>
+                  </p>
+                </div>
+              </div>
+            ) : paymentVerified === null ? (
               <div className="text-center py-4">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <p className="text-gray-600 mt-2">Checking payment status...</p>
